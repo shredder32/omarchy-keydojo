@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Safety net for Keydojo's key capture. While a quiz runs, Hyprland sits in the
+# empty "keydojo" submap so combos reach the overlay instead of firing. If the
+# overlay disappears without resetting it (shell crash, reload, plugin removed),
+# this puts the submap back so the user's keybindings work again.
+
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/keydojo-guard.lock"
+flock -n 9 || exit 0
+
+while sleep 1; do
+  [[ $(hyprctl repl 'return hl.get_current_submap()' 2>/dev/null) == keydojo ]] || exit 0
+  if ! hyprctl layers -j 2>/dev/null | grep -q '"namespace": *"keydojo"'; then
+    hyprctl dispatch 'hl.dsp.submap("reset")' >/dev/null 2>&1
+    exit 0
+  fi
+done

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Prints the xkb keymap for the main keyboard's active layout, so Keydojo can
+# label keys the way they are printed on the user's keyboard.
+
+dev=$(hyprctl devices -j 2>/dev/null | jq -c '([.keyboards[] | select(.main == true)][0]) // .keyboards[0] // {}')
+field() { jq -r ".$1 // \"\"" <<<"$dev" | awk -F, -v i="$2" '{ print $i }'; }
+
+index=$(jq -r '.active_layout_index // 0' <<<"$dev")
+layout=$(field layout $((index + 1)))
+variant=$(field variant $((index + 1)))
+options=$(jq -r '.options // ""' <<<"$dev")
+
+args=(--layout "${layout:-us}")
+[[ -n $variant ]] && args+=(--variant "$variant")
+[[ -n $options ]] && args+=(--options "$options")
+
+echo "// keydojo-layout: ${layout:-us}"
+xkbcli compile-keymap "${args[@]}" </dev/null

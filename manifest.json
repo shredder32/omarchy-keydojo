@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "keydojo",
+  "name": "Keydojo",
+  "version": "0.1.0",
+  "author": "Daniele Marandella",
+  "license": "MIT",
+  "description": "A keybinding gym: learn your real Omarchy shortcuts through belts, flashcards, a 60-second blitz and missions on your own desktop.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": false,
+  "entryPoints": {
+    "overlay": "KeyDojo.qml"
+  }
+}
