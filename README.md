@@ -51,7 +51,9 @@ an Italian keyboard you see `Super + '` rather than `Super + MINUS`. Bindings
 your layout can't type directly (for example `/` or `[` on Italian) are
 skipped and counted on the home screen.
 
-English and Italian are built in. Press `L` on the home screen to switch.
+Available in English, Italian, Spanish, French, German and Japanese. Keydojo
+picks your language from the system locale or keyboard layout; press `L` on
+the home screen to switch.
 
 ## Install
 
@@ -112,10 +114,11 @@ Qt caches imported QML components, so after editing a component other than
 
 ## Translations
 
-All UI text lives in `I18n.js`: `STRINGS` holds the interface and mission
-texts per language, `DESC_IT` translates Omarchy's binding descriptions. To
-add a language, copy the `en` block under a new code and translate it; the
-node test above fails if any key is missing.
+Each language is one file in `lang/`: `STRINGS` holds the interface and
+mission texts, `DESC` translates Omarchy's binding descriptions, and `mod_*`
+names the modifier keys the way local keyboards print them (`Strg` in German).
+To add a language, copy `lang/en.js`, translate it, and list it in `I18n.js`;
+the node test fails if any key is missing.
 
 ## License
 

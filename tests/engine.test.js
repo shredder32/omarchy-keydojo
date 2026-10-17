@@ -1,10 +1,15 @@
 // Runs the pure JS modules under node by stripping QML's .pragma/.import lines.
 const fs = require("fs"), path = require("path"), vm = require("vm")
 const root = path.join(__dirname, "..")
+// Resolves `.import "x.js" as Name` relative to the importing file.
 function load(file, extra) {
-  const src = fs.readFileSync(path.join(root, file), "utf8").replace(/^\.(pragma|import).*$/gm, "")
+  const full = path.join(root, file)
+  const src = fs.readFileSync(full, "utf8")
   const ctx = Object.assign({}, extra)
-  vm.createContext(ctx); vm.runInContext(src, ctx); return ctx
+  for (const m of src.matchAll(/^\.import "([^"]+)" as (\w+)/gm)) {
+    if (!(m[2] in ctx)) ctx[m[2]] = load(path.join(path.dirname(file), m[1]), extra)
+  }
+  vm.createContext(ctx); vm.runInContext(src.replace(/^\.(pragma|import).*$/gm, ""), ctx); return ctx
 }
 const Keymap = load("Keymap.js")
 const Engine = load("Engine.js", { Keymap })
@@ -20,7 +25,7 @@ for (let t = 0; t < Engine.TIERS.length; t++) {
   for (const c of list) console.log("   ", I18n.desc("it", c.id, c.family ? c.members[0].n : null).padEnd(48),
     c.members.map(m => m.mods.map(Keymap.modLabel).concat(m.label).join("+")).slice(0, 3).join("  |  "))
 }
-const missing = cards.list.filter(c => !(c.id in I18n.DESC_IT)).map(c => c.id)
+const missing = cards.list.filter(c => !(c.id in I18n.TABLES.it.DESC)).map(c => c.id)
 console.log("\nuntranslated:", missing)
 // progress simulation
 const p = Engine.newProgress()
@@ -67,19 +72,24 @@ console.log("options", Engine.recognizeOptions(cards, p, q).map(o => o.card.id))
   show("Browser"); show("Terminal")
 }
 
-// Translations: every mission text resolves, and every language has every key.
+// Translations: every language has every UI key and every binding description.
 {
   const Missions = load("Missions.js")
-  const keys = new Set()
+  const keys = new Set(Object.keys(I18n.TABLES.en.STRINGS))
   for (const run of Missions.RUNS) {
     keys.add(Missions.runTitleKey(run))
     for (const step of run.steps) if (step.text) keys.add(step.text)
   }
+  const descKeys = Object.keys(I18n.TABLES.it.DESC)
   const missing = []
-  for (const lang of Object.keys(I18n.STRINGS)) {
-    for (const k of keys) if (!(k in I18n.STRINGS[lang])) missing.push(`${lang}:${k}`)
-    for (const k of Object.keys(I18n.STRINGS.en)) if (!(k in I18n.STRINGS[lang])) missing.push(`${lang}:${k}`)
+  for (const lang of I18n.LANGS) {
+    const table = I18n.TABLES[lang]
+    for (const k of keys) if (!(k in table.STRINGS)) missing.push(`${lang}:${k}`)
+    if (lang !== "en") for (const k of descKeys) if (!(k in table.DESC)) missing.push(`${lang}:desc:${k}`)
+    for (const k of Object.keys(table.STRINGS)) if (!keys.has(k)) missing.push(`${lang}:extra:${k}`)
   }
-  console.assert(missing.length === 0, "missing translations", missing)
-  console.log("translations:", Object.keys(I18n.STRINGS).join("+"), keys.size, "mission keys,", missing.length ? "MISSING " + missing.join(" ") : "complete")
+  console.assert(missing.length === 0, "translation gaps", missing)
+  console.log("translations:", I18n.LANGS.join("+"), keys.size, "keys,", descKeys.length, "descriptions,", missing.length ? "GAPS " + missing.join(" ") : "complete")
+  for (const lang of I18n.LANGS) console.log("  " + lang.padEnd(3), I18n.t(lang, "nextBelt", I18n.t(lang, "belt_yellow"), 9, 11, I18n.t(lang, "tier_basics")), "|", I18n.desc(lang, "Switch to workspace #", 3))
+  console.log("defaults:", ["it_IT","de_DE","ja_JP","en_US"].map(l => l + "→" + I18n.defaultLang(l, "")).join(" "), "| en_US+de →", I18n.defaultLang("en_US", "de"), "| en_US+jp →", I18n.defaultLang("en_US", "jp"))
 }

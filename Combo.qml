@@ -7,6 +7,8 @@ Row {
   id: combo
 
   property var mods: []
+  // Optional per-language modifier labels; falls back to Super/Shift/Ctrl/Alt.
+  property var modNames: ({})
   property string keyLabel: ""
   property bool hideKey: false
   property bool hideAll: false
@@ -15,7 +17,7 @@ Row {
   property color foreground: Color.menu.text
 
   readonly property var parts: {
-    var list = (mods || []).map(function(m) { return Keymap.modLabel(m) })
+    var list = (mods || []).map(function(m) { return combo.modNames[m] || Keymap.modLabel(m) })
     list.push(hideKey || hideAll ? "?" : keyLabel)
     if (hideAll) return list.map(function() { return "?" })
     return list

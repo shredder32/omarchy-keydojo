@@ -35,7 +35,7 @@ Item {
 
   property bool opened: false
   property string screen: "loading"
-  property string lang: I18n.defaultLang(Qt.locale().name)
+  property string lang: I18n.defaultLang(Qt.locale().name, "")
   property var progress: Engine.newProgress()
   property bool progressReady: false
   property var keymap: Keymap.emptyKeymap()
@@ -134,7 +134,7 @@ Item {
     for (var i = 0; i < Engine.MODES.length; i++) {
       var m = Engine.MODES[i]
       var unlocked = root.cards ? Engine.modeUnlocked(m, root.cards, root.progress) : i === 0
-      var lockText = m.rule.belt !== undefined ? root.tr("lock_belt", root.beltName(m.rule.belt).toLowerCase()) : root.tr("lock_learned", m.rule.learned)
+      var lockText = m.rule.belt !== undefined ? root.tr("lock_belt", root.beltInline(m.rule.belt)) : root.tr("lock_learned", m.rule.learned)
       out.push({ unlocked: unlocked, lockText: lockText })
     }
     return out
@@ -146,6 +146,16 @@ Item {
   function tr() {
     return I18n.t.apply(null, [root.lang].concat(Array.prototype.slice.call(arguments)))
   }
+
+  // Belt name inside a sentence: lowercase where the language wants it
+  // ("reach the yellow belt"), as-is where it doesn't (German nouns, Japanese).
+  function beltInline(i) {
+    var name = beltName(i)
+    return tr("lowercaseBelt") === "yes" ? name.toLowerCase() : name
+  }
+
+  // Modifier labels as printed on keyboards in the current language (Strg, Maj…).
+  readonly property var modNames: ({ SUPER: tr("mod_SUPER"), SHIFT: tr("mod_SHIFT"), CTRL: tr("mod_CTRL"), ALT: tr("mod_ALT") })
 
   function beltName(i) { return tr("belt_" + Engine.BELTS[Math.min(i, Engine.BELTS.length - 1)]) }
   function tierName(i) { return tr("tier_" + Engine.TIERS[Math.min(i, Engine.TIERS.length - 1)]) }
@@ -252,7 +262,7 @@ Item {
   function applyProgress(p) {
     if (root.progressReady) return
     root.progress = p
-    if (p.lang === "it" || p.lang === "en") root.lang = p.lang
+    if (I18n.LANGS.indexOf(p.lang) !== -1) root.lang = p.lang
     else root.pickDefaultLang()
     root.progressReady = true
     root.revision++
@@ -260,8 +270,8 @@ Item {
 
   // No saved choice yet: Italian when either the locale or the keyboard is.
   function pickDefaultLang() {
-    if (root.progress.lang === "it" || root.progress.lang === "en") return
-    root.lang = I18n.defaultLang(Qt.locale().name) === "it" || root.layoutHint.indexOf("it") === 0 ? "it" : "en"
+    if (I18n.LANGS.indexOf(root.progress.lang) !== -1) return
+    root.lang = I18n.defaultLang(Qt.locale().name, root.layoutHint)
   }
 
   function saveProgress() {
@@ -330,7 +340,7 @@ Item {
     else if (key >= Qt.Key_1 && key <= Qt.Key_5) { root.homeSel = key - Qt.Key_1; root.startMode(root.homeSel) }
     else if (key === Qt.Key_Return || key === Qt.Key_Enter || key === Qt.Key_Space) root.startMode(root.homeSel)
     else if (key === Qt.Key_L) {
-      root.lang = root.lang === "it" ? "en" : "it"
+      root.lang = I18n.nextLang(root.lang)
       root.progress.lang = root.lang
       root.saveProgress()
     }
@@ -1044,7 +1054,7 @@ Item {
 
               Text {
                 id: helpText
-                text: root.tr("homeHelp")
+                text: root.tr("homeHelp", I18n.langName(root.lang))
                 color: Util.alpha(root.fg, 0.55)
                 font.family: root.font
                 font.pixelSize: Style.font.bodySmall
@@ -1164,6 +1174,7 @@ Item {
               height: Style.space(92)
 
               Combo {
+                modNames: root.modNames
                 id: targetCombo
                 anchors.centerIn: parent
                 size: Style.font.display
@@ -1229,6 +1240,7 @@ Item {
               }
 
               Combo {
+                modNames: root.modNames
                 size: Style.font.body
                 tone: "bad"
                 mods: root.pressed ? root.pressed.mods : []
@@ -1268,7 +1280,7 @@ Item {
                 KeyCap {
                   required property string modelData
                   size: Style.font.bodySmall
-                  text: Keymap.modLabel(modelData)
+                  text: root.modNames[modelData]
                   lit: root.heldMods[modelData] === true
                 }
               }
@@ -1348,6 +1360,7 @@ Item {
             }
 
             Combo {
+              modNames: root.modNames
               anchors.horizontalCenter: parent.horizontalCenter
               size: Style.font.display
               mods: root.question ? root.question.member.mods : []
@@ -1516,7 +1529,7 @@ Item {
               width: summary.width
               horizontalAlignment: Text.AlignHCenter
               visible: root.mode !== "blitz" && root.tierNow !== null && !root.beltUp
-              text: root.tierNow ? root.tr("goalLeft", Math.max(0, root.tierNow.needed - root.tierNow.mastered), root.beltName(root.belt + 1).toLowerCase()) : ""
+              text: root.tierNow ? root.tr("goalLeft", Math.max(0, root.tierNow.needed - root.tierNow.mastered), root.beltInline(root.belt + 1)) : ""
               color: root.accent
               font.family: root.font
               font.pixelSize: Style.font.heading
@@ -1714,6 +1727,7 @@ Item {
         }
 
         Combo {
+          modNames: root.modNames
           visible: root.screen === "mission" && root.missionHint
           size: Style.font.body
           mods: { var m = root.stepMember(root.currentStep); return m ? m.mods : [] }
