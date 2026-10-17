@@ -124,6 +124,22 @@ Item {
     return root.nextDue > 0 ? root.tr("nextReview", root.duration(root.nextDue)) : ""
   }
 
+  // Moves the home backdrop replays: the ones you know, or the basics to start.
+  readonly property var ambientCombos: {
+    root.revision
+    if (!root.cards) return []
+    var pool = Engine.learnedCards(root.cards, root.progress)
+    if (pool.length === 0) pool = root.cards.list.filter(function(c) { return c.tier === 0 })
+    var out = []
+    for (var i = 0; i < pool.length; i++) {
+      var members = pool[i].family ? pool[i].members.slice(0, 3) : [pool[i].members[0]]
+      for (var j = 0; j < members.length; j++)
+        out.push({ mods: members[j].mods, code: members[j].code,
+                   text: I18n.desc(root.lang, pool[i].id, pool[i].family ? members[j].n : null) })
+    }
+    return out
+  }
+
   readonly property var upNext: {
     root.revision
     return root.cards ? Engine.newCards(root.cards, root.progress, 6) : []
@@ -718,14 +734,28 @@ Item {
 
     onVisibleChanged: if (visible) Qt.callLater(function() { keyCatcher.forceActiveFocus() })
 
+    // On the home screen the backdrop is the scene, so the desktop behind it
+    // fades almost out; in games the scrim stays lighter.
     Rectangle {
       anchors.fill: parent
-      color: Util.alpha(Color.menu.background, 0.72)
+      color: Util.alpha(Color.menu.background, root.screen === "home" ? 0.985 : 0.72)
+      Behavior on color { ColorAnimation { duration: 300 } }
     }
 
     MouseArea {
       anchors.fill: parent
       onClicked: root.dismiss()
+    }
+
+    AmbientKeys {
+      anchors.fill: parent
+      running: root.opened && root.screen === "home" && panel.visible
+      keymap: root.keymap
+      modNames: root.modNames
+      combos: root.ambientCombos
+      avoid: Qt.rect(card.x, card.y, card.width, card.height)
+      foreground: root.fg
+      accent: root.accent
     }
 
     Confetti {
