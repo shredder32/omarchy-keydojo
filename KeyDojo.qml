@@ -17,7 +17,7 @@ Item {
   property var shell: null
   property var manifest: null
 
-  readonly property string pluginId: (manifest && manifest.id) || "keydojo"
+  readonly property string pluginId: (manifest && manifest.id) || "io.github.shredder32.keydojo"
   readonly property string pluginDir: decodeURIComponent(Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "")).replace(/\/$/, "")
   readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/keydojo"
 

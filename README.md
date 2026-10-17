@@ -4,6 +4,8 @@
 keybindings (Omarchy defaults plus your own overrides) and turns them into a
 short, friendly game that runs as a native Omarchy shell overlay.
 
+![Learn mode](preview.png)
+
 ## How it plays
 
 You climb belts, white to black. Each belt covers one group of shortcuts:
@@ -17,6 +19,8 @@ You earn a belt by mastering 80% of its moves, and new game modes unlock as you 
 | **Recall** | 6 moves learned | Flashcards with spaced repetition: press the combo from memory |
 | **Blitz** | yellow belt | 60 seconds, streaks build a ×5 multiplier |
 | **Missions** | orange belt | Keydojo hides and watches Hyprland while you do it for real: open a terminal, send it to workspace 7, follow it, close it… |
+
+![Home screen](docs/home.png)
 
 ## How it teaches
 
@@ -35,6 +39,8 @@ Keydojo leans on a few well-studied memory effects:
 
 There are no notifications and no streaks. Keydojo never calls you back; it
 shows what is due when you open it.
+
+![Recognize mode](docs/recognize.png)
 
 While a quiz is open, Hyprland is switched to an empty `keydojo` submap, so
 pressing `Super+Enter` reaches the game instead of opening a terminal. Wrong
@@ -56,10 +62,19 @@ omarchy plugin add https://github.com/shredder32/omarchy-keydojo.git --enable
 Then bind it, for example in `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + CTRL + ALT + K", "Keydojo", "omarchy-shell shell toggle keydojo")
+o.bind("SUPER + CTRL + ALT + K", "Keydojo", "omarchy-shell shell toggle io.github.shredder32.keydojo")
 ```
 
-Or open it once with `omarchy-shell shell toggle keydojo`.
+Or open it once with `omarchy-shell shell toggle io.github.shredder32.keydojo`.
+
+## Uninstall
+
+```bash
+omarchy plugin remove io.github.shredder32.keydojo
+```
+
+Then delete the keybinding you added to `~/.config/hypr/bindings.lua`, and,
+if you want to forget your progress too, `~/.local/state/keydojo/`.
 
 ## Safety
 
@@ -75,7 +90,11 @@ Progress lives in `~/.local/state/keydojo/progress.json`.
 ## Requirements
 
 Omarchy with the Quickshell-based `omarchy-shell` and Hyprland's Lua config
-(0.56+), plus `jq` and `xkbcli`, which Omarchy already ships.
+(0.56+). External tools used at runtime, all shipped with Omarchy: `hyprctl`,
+`jq`, `xkbcli` (from libxkbcommon), `flock` and `setsid` (util-linux).
+
+Keydojo does not change your configuration. It only adds a temporary
+Hyprland submap at runtime while a quiz is open.
 
 ## Development
 
