@@ -50,7 +50,7 @@ English and Italian are built in. Press `L` on the home screen to switch.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/<you>/omarchy-keydojo.git --enable
+omarchy plugin add https://github.com/shredder32/omarchy-keydojo.git --enable
 ```
 
 Then bind it, for example in `~/.config/hypr/bindings.lua`:

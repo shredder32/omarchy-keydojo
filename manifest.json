@@ -12,5 +12,7 @@
   "keepLoaded": false,
   "entryPoints": {
     "overlay": "KeyDojo.qml"
-  }
+  },
+  "homepage": "https://github.com/shredder32/omarchy-keydojo",
+  "repository": "https://github.com/shredder32/omarchy-keydojo"
 }
