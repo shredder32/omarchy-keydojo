@@ -66,3 +66,20 @@ console.log("options", Engine.recognizeOptions(cards, p, q).map(o => o.card.id))
   console.log("belt now", Engine.belt(cards, p))
   show("Browser"); show("Terminal")
 }
+
+// Translations: every mission text resolves, and every language has every key.
+{
+  const Missions = load("Missions.js")
+  const keys = new Set()
+  for (const run of Missions.RUNS) {
+    keys.add(Missions.runTitleKey(run))
+    for (const step of run.steps) if (step.text) keys.add(step.text)
+  }
+  const missing = []
+  for (const lang of Object.keys(I18n.STRINGS)) {
+    for (const k of keys) if (!(k in I18n.STRINGS[lang])) missing.push(`${lang}:${k}`)
+    for (const k of Object.keys(I18n.STRINGS.en)) if (!(k in I18n.STRINGS[lang])) missing.push(`${lang}:${k}`)
+  }
+  console.assert(missing.length === 0, "missing translations", missing)
+  console.log("translations:", Object.keys(I18n.STRINGS).join("+"), keys.size, "mission keys,", missing.length ? "MISSING " + missing.join(" ") : "complete")
+}

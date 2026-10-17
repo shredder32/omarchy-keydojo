@@ -110,6 +110,13 @@ node tests/engine.test.js /tmp/print.txt /tmp/xkb.txt
 Qt caches imported QML components, so after editing a component other than
 `KeyDojo.qml`, run `omarchy-restart-shell`.
 
+## Translations
+
+All UI text lives in `I18n.js`: `STRINGS` holds the interface and mission
+texts per language, `DESC_IT` translates Omarchy's binding descriptions. To
+add a language, copy the `en` block under a new code and translate it; the
+node test above fails if any key is missing.
+
 ## License
 
 MIT

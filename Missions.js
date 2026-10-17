@@ -177,44 +177,10 @@ var RUNS = [
   ] }
 ]
 
-var STEP_TEXT = {
-  en: {
-    step_unfullscreen: "Leave full screen (same combo)",
-    step_retile: "Put it back into the tiling (same combo)",
-    step_formerAgain: "Bounce back again (same combo)",
-    step_hideScratch: "Hide the scratchpad (same combo)",
-    step_showScratch: "Bring it back once more",
-    step_ungroup: "Ungroup them (same combo)",
-    step_closeOther: "Close the other window too",
-    step_popBack: "Tuck it back in (same combo)",
-    step_unfullwidth: "Back to normal width (same combo)",
-    run_first_day: "First day", run_menus: "Menu tour", run_moving_day: "Moving day",
-    run_follow_me: "Follow me", run_scratchpad: "Secret drawer", run_two_windows: "Two windows",
-    run_pop_out: "Pop out", run_toolbox: "Toolbox"
-  },
-  it: {
-    step_unfullscreen: "Esci dallo schermo intero (stessa combo)",
-    step_retile: "Rimettila affiancata (stessa combo)",
-    step_formerAgain: "Rimbalza di nuovo (stessa combo)",
-    step_hideScratch: "Nascondi lo scratchpad (stessa combo)",
-    step_showScratch: "Fallo riapparire ancora",
-    step_ungroup: "Sciogli il gruppo (stessa combo)",
-    step_closeOther: "Chiudi anche l'altra finestra",
-    step_popBack: "Rimettila al suo posto (stessa combo)",
-    step_unfullwidth: "Torna alla larghezza normale (stessa combo)",
-    run_first_day: "Primo giorno", run_menus: "Giro dei menu", run_moving_day: "Trasloco",
-    run_follow_me: "Seguimi", run_scratchpad: "Il cassetto segreto", run_two_windows: "Due finestre",
-    run_pop_out: "Fuori dal coro", run_toolbox: "Cassetta degli attrezzi"
-  }
-}
-
-function stepText(lang, key) {
-  var table = STEP_TEXT[lang] || STEP_TEXT.en
-  return table[key] || STEP_TEXT.en[key] || ""
-}
-
-function runTitle(lang, run) {
-  return stepText(lang, "run_" + run.id.replace(/-/g, "_"))
+// Mission step and run titles live in I18n.js under the same keys
+// (`step_*`, and `run_*` from the run id with dashes as underscores).
+function runTitleKey(run) {
+  return "run_" + run.id.replace(/-/g, "_")
 }
 
 function available(cardsById, maxTier) {

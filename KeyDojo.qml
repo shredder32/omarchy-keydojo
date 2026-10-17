@@ -624,7 +624,7 @@ Item {
 
   function stepText(step) {
     if (!step) return ""
-    if (step.text) return Missions.stepText(root.lang, step.text) || root.tr(step.text)
+    if (step.text) return root.tr(step.text)
     var card = root.stepCard(step)
     return I18n.desc(root.lang, card.id, card.family ? root.missionCtx[step.n] : null)
   }
@@ -1568,7 +1568,7 @@ Item {
             spacing: Style.space(14)
 
             Text {
-              text: "󰓾  " + root.tr("missionTitle") + " · " + (root.missionRun ? Missions.runTitle(root.lang, root.missionRun) : "")
+              text: "󰓾  " + root.tr("missionTitle") + " · " + (root.missionRun ? root.tr(Missions.runTitleKey(root.missionRun)) : "")
               color: root.accent
               font.family: root.font
               font.pixelSize: Style.font.display
@@ -1662,7 +1662,7 @@ Item {
 
           Text {
             id: stepLabel
-            text: "󰓾 " + (root.missionRun ? Missions.runTitle(root.lang, root.missionRun) : "") + " · "
+            text: "󰓾 " + (root.missionRun ? root.tr(Missions.runTitleKey(root.missionRun)) : "") + " · "
               + root.tr("missionStep", Math.min(root.missionStep + 1, root.missionRun ? root.missionRun.steps.length : 1), root.missionRun ? root.missionRun.steps.length : 1)
             color: root.accent
             font.family: root.font

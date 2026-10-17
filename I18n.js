@@ -67,6 +67,19 @@ var STRINGS = {
     minutes: "%1 min", hours: "%1 h", days: "%1 days",
     keyEnter: "Enter",
     chooseMode: "Choose a training",
+    // Missions
+    step_unfullscreen: "Leave full screen (same combo)",
+    step_retile: "Put it back into the tiling (same combo)",
+    step_formerAgain: "Bounce back again (same combo)",
+    step_hideScratch: "Hide the scratchpad (same combo)",
+    step_showScratch: "Bring it back once more",
+    step_ungroup: "Ungroup them (same combo)",
+    step_closeOther: "Close the other window too",
+    step_popBack: "Tuck it back in (same combo)",
+    step_unfullwidth: "Back to normal width (same combo)",
+    run_first_day: "First day", run_menus: "Menu tour", run_moving_day: "Moving day",
+    run_follow_me: "Follow me", run_scratchpad: "Secret drawer", run_two_windows: "Two windows",
+    run_pop_out: "Pop out", run_toolbox: "Toolbox",
     level: "Lv %1"
   },
   it: {
@@ -135,6 +148,19 @@ var STRINGS = {
     minutes: "%1 min", hours: "%1 ore", days: "%1 giorni",
     keyEnter: "Invio",
     chooseMode: "Scegli un allenamento",
+    // Missions
+    step_unfullscreen: "Esci dallo schermo intero (stessa combo)",
+    step_retile: "Rimettila affiancata (stessa combo)",
+    step_formerAgain: "Rimbalza di nuovo (stessa combo)",
+    step_hideScratch: "Nascondi lo scratchpad (stessa combo)",
+    step_showScratch: "Fallo riapparire ancora",
+    step_ungroup: "Sciogli il gruppo (stessa combo)",
+    step_closeOther: "Chiudi anche l'altra finestra",
+    step_popBack: "Rimettila al suo posto (stessa combo)",
+    step_unfullwidth: "Torna alla larghezza normale (stessa combo)",
+    run_first_day: "Primo giorno", run_menus: "Giro dei menu", run_moving_day: "Trasloco",
+    run_follow_me: "Seguimi", run_scratchpad: "Il cassetto segreto", run_two_windows: "Due finestre",
+    run_pop_out: "Fuori dal coro", run_toolbox: "Cassetta degli attrezzi",
     level: "Liv %1"
   }
 }
