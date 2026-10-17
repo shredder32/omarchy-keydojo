@@ -502,8 +502,8 @@ Item {
       else root.markBad(combo, root.tr("pressIt"))
       return
     }
-    if (root.phase === "retry" || root.phase === "reveal") {
-      if (ok) { root.markGood(0); root.advance(450) }
+    if (root.phase === "retry") {
+      if (ok) { root.markGood(0); root.advance(root.mode === "blitz" ? 250 : 450) }
       else root.markBad(combo, root.tr("nowYou"))
       return
     }
@@ -531,9 +531,10 @@ Item {
       root.streakCount = 0
       root.mult = 1
       root.grade("blitz", false)
-      root.markBad(combo)
-      root.phase = "reveal"
-      root.advance(1200)
+      // The right combo shows at once and must be pressed to move on: the
+      // fingers end on the correct move, and the clock keeps running.
+      root.markBad(combo, root.tr("nowYou"))
+      root.phase = "retry"
       return
     }
     if (root.mode === "recall" && root.attempts === 1) {
@@ -1244,7 +1245,7 @@ Item {
               text: {
                 if (root.feedbackText !== "") return (root.feedbackKind === "good" ? "󰄬  " : root.feedbackKind === "bad" ? "󰅖  " : "") + root.feedbackText
                 if (root.phase === "intro") return root.tr("ctaIntro")
-                if (root.phase === "retry" || root.phase === "reveal") return root.tr("ctaRetry")
+                if (root.phase === "retry") return root.tr("ctaRetry")
                 if (root.mode === "blitz") return root.tr("ctaBlitz")
                 if (root.hintShown) return root.tr("ctaHint")
                 return root.tr("ctaAsk")
