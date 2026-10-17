@@ -1,6 +1,6 @@
 # Keydojo
 
-A keybinding gym for [Omarchy](https://omarchy.org). Keydojo reads **your**
+**Learn your combos.** A keybinding trainer for [Omarchy](https://omarchy.org). Keydojo reads **your**
 keybindings (Omarchy defaults plus your own overrides) and turns them into a
 short, friendly game that runs as a native Omarchy shell overlay.
 

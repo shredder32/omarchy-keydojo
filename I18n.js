@@ -2,7 +2,7 @@
 
 var STRINGS = {
   en: {
-    tagline: "Keybinding gym for Omarchy",
+    tagline: "Learn your combos",
     loading: "Reading your keybindings…",
     noBindings: "No keybindings found. Is `omarchy menu keybindings --print` working?",
     belt_white: "White belt", belt_yellow: "Yellow belt", belt_orange: "Orange belt", belt_green: "Green belt",
@@ -70,7 +70,7 @@ var STRINGS = {
     level: "Lv %1"
   },
   it: {
-    tagline: "Palestra di scorciatoie per Omarchy",
+    tagline: "Impara le tue combo",
     loading: "Leggo le tue scorciatoie…",
     noBindings: "Nessuna scorciatoia trovata. `omarchy menu keybindings --print` funziona?",
     belt_white: "Cintura bianca", belt_yellow: "Cintura gialla", belt_orange: "Cintura arancione", belt_green: "Cintura verde",
