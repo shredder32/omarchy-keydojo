@@ -158,7 +158,7 @@ function dayKey(date) {
 }
 
 
-// Applies an answer. Returns { xp, levelUp, level, slow, early } for feedback.
+// Applies an answer. Returns { xp, levelUp, level, slow, early, due } for feedback.
 // Levels 1-2 can be climbed in one sitting; above that a move must be due
 // for review (spacing) and answered fast (automaticity).
 function grade(progress, cardId, correct, mode, fast) {
@@ -180,12 +180,15 @@ function grade(progress, cardId, correct, mode, fast) {
     s.wrong++
     if (mode === "recall") s.lvl = Math.max(1, s.lvl - 1)
   }
-  if (s.lvl !== before || !correct || slow) s.due = now + INTERVALS[s.lvl] * 60000
+  if (s.lvl !== before || slow) s.due = now + INTERVALS[s.lvl] * 60000
+  // A miss never pushes a review further out. Recall also drops the level,
+  // so the move comes back in ten minutes and must climb again from there.
+  if (!correct) s.due = Math.min(s.due || 0, now + INTERVALS[mode === "recall" ? Math.min(1, s.lvl) : s.lvl] * 60000)
   progress.cards[cardId] = s
   progress.answered = (progress.answered || 0) + 1
   var xp = correct ? 10 + (fast ? 5 : 0) : 0
   progress.xp = (progress.xp || 0) + xp
-  return { xp: xp, levelUp: s.lvl > before, level: s.lvl, slow: slow, early: early }
+  return { xp: xp, levelUp: s.lvl > before, level: s.lvl, slow: slow, early: early, due: s.due }
 }
 
 // ------------------------------------------------------------ belts & unlocks
@@ -239,6 +242,16 @@ function newCards(cards, progress, limit) {
 function learnedCards(cards, progress) {
   var top = unlockedTier(cards, progress)
   return cards.list.filter(function(c) { return c.tier <= top && level(progress, c.id) >= 1 })
+}
+
+// Learned moves an answer can level up right now: due for review, or still
+// low enough to climb without waiting.
+function climbableCards(cards, progress) {
+  var now = Date.now()
+  return learnedCards(cards, progress).filter(function(c) {
+    var s = stateOf(progress, c.id)
+    return s.lvl < CLIMB_FREELY || now >= s.due
+  })
 }
 
 function dueCards(cards, progress) {

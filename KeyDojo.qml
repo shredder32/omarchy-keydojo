@@ -121,7 +121,27 @@ Item {
   readonly property string reviewLine: {
     if (root.learned === 0) return ""
     if (root.dueNow > 0) return root.tr("dueNow", root.dueNow)
-    return root.nextDue > 0 ? root.tr("nextReview", root.duration(root.nextDue)) : ""
+    if (root.nextDue <= 0) return ""
+    return root.tr(root.suggested === -1 ? "idleReview" : "nextReview", root.duration(root.nextDue))
+  }
+
+  // The mode that moves progress forward right now: Recall when an answer
+  // can level a move up, then Learn while new moves are left. -1 when
+  // nothing can level up until the next review.
+  readonly property int suggested: {
+    root.revision
+    root.clock
+    if (!root.cards) return 0
+    var recall = root.modeIndex("recall")
+    if (root.modeStates[recall].unlocked && Engine.climbableCards(root.cards, root.progress).length > 0) return recall
+    if (root.upNext.length > 0) return 0
+    return -1
+  }
+
+  // Each arrival on the home screen starts on the suggested mode; moving the
+  // selection by hand wins until the next arrival.
+  function preselect() {
+    if (root.suggested !== -1) root.homeSel = root.suggested
   }
 
   readonly property var upNext: {
@@ -175,6 +195,7 @@ Item {
     root.heldMods = ({})
     root.homeMessage = ""
     if (root.screen !== "loading") root.screen = "home"
+    root.preselect()
     keymapProc.running = true
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -241,6 +262,7 @@ Item {
     root.skipped = parsed.skipped
     root.revision++
     if (root.screen === "loading") root.screen = "home"
+    root.preselect()
   }
 
   Process {
@@ -266,6 +288,7 @@ Item {
     else root.pickDefaultLang()
     root.progressReady = true
     root.revision++
+    if (root.screen === "home") root.preselect()
   }
 
   // No saved choice yet: Italian when either the locale or the keyboard is.
@@ -351,6 +374,7 @@ Item {
     advanceTimer.stop()
     root.question = null
     root.screen = "home"
+    root.preselect()
   }
 
   // ------------------------------------------------------------ sessions
@@ -451,9 +475,16 @@ Item {
     return root.tr("thatWas", I18n.desc(root.lang, hit.card.id, hit.card.family ? hit.member.n : null))
   }
 
-  function markGood(xp, result) {
+  // Why a correct answer did not level the move up, if it didn't.
+  function answerNote(res, helped, ms) {
+    if (helped) return root.tr("helpedNote")
+    if (res.slow) return root.tr("slowNote", Math.round(ms / 1000))
+    if (res.early) return root.tr("earlyNote", root.duration(res.due - Date.now()))
+    return ""
+  }
+
+  function markGood(xp, note) {
     root.feedbackKind = "good"
-    var note = result && result.slow ? root.tr("slowNote") : result && result.early ? root.tr("earlyNote") : ""
     root.feedbackText = root.tr("correct") + (xp > 0 ? "  +" + xp + " XP" : "") + (note ? "  ·  " + note : "")
     pop.restart()
   }
@@ -494,7 +525,8 @@ Item {
 
     if (ok) {
       var helped = root.hintShown || root.attempts > 0
-      var fast = !helped && Date.now() - root.askedAt < Engine.FAST_MS
+      var ms = Date.now() - root.askedAt
+      var fast = !helped && ms < Engine.FAST_MS
       var gm = helped ? "learn" : (root.mode === "learn" ? "recognize" : root.mode)
       var res = root.grade(gm, true, fast)
       if (!helped) root.sCorrect++
@@ -504,8 +536,9 @@ Item {
         root.mult = Math.min(5, 1 + Math.floor(root.streakCount / 3))
         root.score += 10 * root.mult
       }
-      root.markGood(res.xp, root.mode === "blitz" ? null : res)
-      root.advance(root.mode === "blitz" ? 300 : (res.slow || res.early ? 1400 : 700))
+      var note = root.mode === "blitz" ? "" : root.answerNote(res, helped, ms)
+      root.markGood(res.xp, note)
+      root.advance(root.mode === "blitz" ? 300 : (note ? 1600 : 700))
       return
     }
 
@@ -702,6 +735,7 @@ Item {
     hintTimer.stop()
     root.saveProgress()
     root.screen = "home"
+    root.preselect()
   }
 
   // ------------------------------------------------------------ main overlay
@@ -896,7 +930,7 @@ Item {
                       width: parent.width
                       horizontalAlignment: Text.AlignHCenter
                       text: index === 0 ? "" : root.tierName(index - 1)
-                      color: Util.alpha(root.fg, index <= root.belt ? 0.75 : 0.4)
+                      color: Util.alpha(root.fg, index <= root.belt ? 0.75 : 0.55)
                       font.family: root.font
                       font.pixelSize: Style.font.caption
                       elide: Text.ElideRight
@@ -908,7 +942,7 @@ Item {
               Text {
                 width: parent.width
                 text: root.tierNow
-                  ? root.tr("nextBelt", root.beltName(root.belt + 1), root.tierNow.needed, root.tierNow.total, root.tierName(root.belt))
+                  ? root.tr("nextBelt", root.beltName(root.belt + 1), root.tierNow.mastered, root.tierNow.needed, root.tierName(root.belt))
                   : root.tr("allBelts")
                 color: root.fg
                 font.family: root.font
@@ -977,6 +1011,8 @@ Item {
                   lockText: root.modeStates[index].lockText
                   locked: !root.modeStates[index].unlocked
                   selected: index === root.homeSel
+                  suggested: index === root.suggested
+                  suggestedText: root.tr("suggested")
                   badge: Engine.MODES[index].id === "recall" && root.dueNow > 0 && root.modeStates[index].unlocked ? String(root.dueNow) : ""
                   onActivated: { root.homeSel = index; root.startMode(index) }
                 }
