@@ -31,8 +31,12 @@ tile shows how long its session is. A few more keys there:
 - `N` turns on reminders (off by default, see below).
 - `L` switches language.
 
+![Catalog](docs/catalog.png)
+
 After a session, the summary lists up to three moves you missed, next to what
 you mixed them up with; `R` replays them as a short Recall drill.
+
+![Session summary](docs/summary.png)
 
 ## How it teaches
 
@@ -66,6 +70,11 @@ Keys are matched by physical position and labelled with your layout, so on
 an Italian keyboard you see `Super + '` rather than `Super + MINUS`. Bindings
 your layout can't type directly (for example `/` or `[` on Italian) are
 skipped and counted on the home screen.
+
+Colours, fonts and borders come from your Omarchy theme, so Keydojo always
+matches the rest of your desktop; only the belt colours stay the same.
+
+![Keydojo in five Omarchy themes](docs/themes.png)
 
 Available in English, Italian, Spanish, French, German and Japanese. Keydojo
 picks your language from the system locale or keyboard layout; press `L` on
