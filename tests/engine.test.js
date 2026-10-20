@@ -53,6 +53,26 @@ console.log("options", Engine.recognizeOptions(cards, p, q).map(o => o.card.id))
   console.log("spacing/speed rules:", early.level, slow.level, ok.level)
 }
 
+// A miss never pushes a review out: a mastered move missed in Blitz keeps its
+// date, and a Recall miss drops a level and comes back in ten minutes.
+{
+  const p = Engine.newProgress()
+  const id = "Terminal"
+  const inDays = (d) => Date.now() + d * 24 * 3600000
+  p.cards[id] = { lvl: 5, due: inDays(2), right: 9, wrong: 0 }
+  const blitz = Engine.grade(p, id, false, "blitz")
+  console.assert(blitz.level === 5 && blitz.due <= inDays(2), "blitz miss keeps the review date", blitz)
+  p.cards[id] = { lvl: 4, due: Date.now() - 1, right: 9, wrong: 0 }
+  Engine.grade(p, id, false, "recognize")
+  console.assert(p.cards[id].due < Date.now(), "overdue move stays due after a miss", p.cards[id])
+  p.cards[id] = { lvl: 5, due: inDays(2), right: 9, wrong: 0 }
+  const recall = Engine.grade(p, id, false, "recall")
+  console.assert(recall.level === 4 && recall.due <= Date.now() + 10 * 60000, "recall miss: back in 10 min", recall)
+  const again = Engine.grade(p, id, true, "recall", true)
+  console.assert(again.early && again.level === 4, "no level-up before the 10 minutes", again)
+  console.log("miss rules:", blitz.level, recall.level, Math.round((recall.due - Date.now()) / 60000) + " min")
+}
+
 // Recognize distractors: known and confusable first.
 {
   const p = Engine.newProgress()
@@ -90,6 +110,6 @@ console.log("options", Engine.recognizeOptions(cards, p, q).map(o => o.card.id))
   }
   console.assert(missing.length === 0, "translation gaps", missing)
   console.log("translations:", I18n.LANGS.join("+"), keys.size, "keys,", descKeys.length, "descriptions,", missing.length ? "GAPS " + missing.join(" ") : "complete")
-  for (const lang of I18n.LANGS) console.log("  " + lang.padEnd(3), I18n.t(lang, "nextBelt", I18n.t(lang, "belt_yellow"), 9, 11, I18n.t(lang, "tier_basics")), "|", I18n.desc(lang, "Switch to workspace #", 3))
+  for (const lang of I18n.LANGS) console.log("  " + lang.padEnd(3), I18n.t(lang, "nextBelt", I18n.t(lang, "belt_yellow"), 5, 9, I18n.t(lang, "tier_basics")), "|", I18n.desc(lang, "Switch to workspace #", 3))
   console.log("defaults:", ["it_IT","de_DE","ja_JP","en_US"].map(l => l + "→" + I18n.defaultLang(l, "")).join(" "), "| en_US+de →", I18n.defaultLang("en_US", "de"), "| en_US+jp →", I18n.defaultLang("en_US", "jp"))
 }

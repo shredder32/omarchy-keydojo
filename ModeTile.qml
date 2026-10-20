@@ -12,6 +12,8 @@ Item {
   property string lockText: ""
   property bool locked: false
   property bool selected: false
+  property bool suggested: false
+  property string suggestedText: ""
   property string badge: ""
   property color foreground: Color.menu.text
   property color accent: Color.accent
@@ -24,10 +26,11 @@ Item {
     height: parent.height
     y: tile.selected ? -Style.space(6) : 0
     radius: Math.max(6, Style.cornerRadius)
-    color: tile.selected ? Util.alpha(tile.accent, 0.14) : Util.alpha(tile.foreground, 0.04)
+    // A locked tile fades its frame and icon only: the unlock requirement
+    // stays as readable as any other description.
+    color: tile.selected ? Util.alpha(tile.accent, 0.14) : Util.alpha(tile.foreground, tile.locked ? 0.02 : 0.04)
     border.width: tile.selected ? Math.max(2, Style.space(2)) : 1
-    border.color: tile.selected ? tile.accent : Util.alpha(tile.foreground, 0.16)
-    opacity: tile.locked ? 0.55 : 1
+    border.color: tile.selected ? tile.accent : Util.alpha(tile.foreground, tile.locked ? 0.1 : 0.16)
 
     Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutBack } }
     Behavior on color { ColorAnimation { duration: 160 } }
@@ -72,6 +75,7 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         text: tile.locked ? "󰌾" : tile.icon
         color: tile.selected && !tile.locked ? tile.accent : tile.foreground
+        opacity: tile.locked ? 0.5 : 1
         font.family: Style.font.family
         font.pixelSize: Style.font.displayLarge * 1.25
         scale: tile.selected && !tile.locked ? 1.12 : 1
@@ -82,7 +86,7 @@ Item {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         text: tile.title
-        color: tile.foreground
+        color: Util.alpha(tile.foreground, tile.locked ? 0.7 : 1)
         font.family: Style.font.family
         font.pixelSize: Style.font.heading
         font.bold: true
@@ -98,6 +102,19 @@ Item {
         font.pixelSize: Style.font.bodySmall
         wrapMode: Text.WordWrap
         maximumLineCount: 3
+      }
+
+      Text {
+        width: parent.width
+        visible: tile.suggested && !tile.locked
+        horizontalAlignment: Text.AlignHCenter
+        text: tile.suggestedText.toUpperCase()
+        color: tile.accent
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        font.letterSpacing: Style.space(1)
+        elide: Text.ElideRight
       }
     }
   }
