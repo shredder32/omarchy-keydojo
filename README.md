@@ -71,6 +71,11 @@ an Italian keyboard you see `Super + '` rather than `Super + MINUS`. Bindings
 your layout can't type directly (for example `/` or `[` on Italian) are
 skipped and counted on the home screen.
 
+Colours, fonts and borders come from your Omarchy theme, so Keydojo always
+matches the rest of your desktop; only the belt colours stay the same.
+
+![Keydojo in five Omarchy themes](docs/themes.png)
+
 Available in English, Italian, Spanish, French, German and Japanese. Keydojo
 picks your language from the system locale or keyboard layout; press `L` on
 the home screen to switch.
