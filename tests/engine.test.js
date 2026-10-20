@@ -53,6 +53,18 @@ console.log("options", Engine.recognizeOptions(cards, p, q).map(o => o.card.id))
   console.log("spacing/speed rules:", early.level, slow.level, ok.level)
 }
 
+// Mastered is a subset of learned, and Recognize stops at its cap.
+{
+  const p = Engine.newProgress()
+  const [a, b] = cards.list
+  p.cards[a.id] = { lvl: Engine.MASTERED_LEVEL, due: 0, right: 3, wrong: 0 }
+  p.cards[b.id] = { lvl: 1, due: 0, right: 1, wrong: 0 }
+  console.assert(Engine.learnedCount(cards, p) === 2 && Engine.masteredCount(cards, p) === 1, "learned 2, mastered 1")
+  for (let i = 0; i < 4; i++) Engine.grade(p, b.id, true, "recognize", true)
+  console.assert(Engine.level(p, b.id) === Engine.RECOGNIZE_CAP, "recognize caps the level", p.cards[b.id])
+  console.log("learned/mastered:", Engine.learnedCount(cards, p), Engine.masteredCount(cards, p), "recognize cap", Engine.level(p, b.id))
+}
+
 // A miss never pushes a review out: a mastered move missed in Blitz keeps its
 // date, and a Recall miss drops a level and comes back in ten minutes.
 {

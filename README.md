@@ -22,6 +22,18 @@ You earn a belt by mastering 80% of its moves, and new game modes unlock as you 
 
 ![Home screen](docs/home.png)
 
+The home screen suggests the mode that moves you forward right now, and each
+tile shows how long its session is. A few more keys there:
+
+- `C` opens the **catalog** of your moves: type to search by name, or press
+  any combo to see what it does and how far you are with it.
+- `M` reduces motion: no pulsing, shaking, confetti or backdrop replays.
+- `N` turns on reminders (off by default, see below).
+- `L` switches language.
+
+After a session, the summary lists up to three moves you missed, next to what
+you mixed them up with; `R` replays them as a short Recall drill.
+
 ## How it teaches
 
 Keydojo leans on a few well-studied memory effects:
@@ -32,13 +44,17 @@ Keydojo leans on a few well-studied memory effects:
   1, 3 and 7 days. The first two steps can be climbed in one sitting; after
   that a move only levels up when it is due again.
 - **Speed.** A move counts as mastered only when it comes out right in under
-  2.5 seconds. Shortcuts pay off once they are automatic.
+  2.5 seconds. Shortcuts pay off once they are automatic. When a right answer
+  doesn't level up, Keydojo says why: your time, the help you used, or when
+  the move is due again.
 - **Confusable choices.** In Recognize the wrong answers are moves you already
   know that look like the right one: same key with other modifiers, or the
   same modifiers on another key.
 
-There are no notifications and no streaks. Keydojo never calls you back; it
-shows what is due when you open it.
+There are no streaks, and by default no notifications: Keydojo shows what is
+due when you open it. If you want a nudge, press `N` on the home screen: you
+get one desktop notification when moves become ready to level up, at most once
+an hour and never while Keydojo is open. `N` again turns it off.
 
 ![Recognize mode](docs/recognize.png)
 
