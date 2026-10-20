@@ -5,6 +5,7 @@ var NAME = "Español"
 var STRINGS = {
   tagline: "Aprende tus combos",
   loading: "Leyendo tus atajos…",
+  loadFailed: "No pude leer tus atajos. Cerrando…",
   belt_white: "Cinturón blanco", belt_yellow: "Cinturón amarillo", belt_orange: "Cinturón naranja", belt_green: "Cinturón verde",
   belt_blue: "Cinturón azul", belt_purple: "Cinturón morado", belt_brown: "Cinturón marrón", belt_black: "Cinturón negro",
   tier_basics: "Lo básico", tier_workspaces: "Espacios", tier_windows: "Ventanas", tier_tools: "Herramientas",

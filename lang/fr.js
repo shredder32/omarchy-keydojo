@@ -5,6 +5,7 @@ var NAME = "Français"
 var STRINGS = {
   tagline: "Apprends tes combos",
   loading: "Lecture de tes raccourcis…",
+  loadFailed: "Impossible de lire tes raccourcis. Fermeture…",
   belt_white: "Ceinture blanche", belt_yellow: "Ceinture jaune", belt_orange: "Ceinture orange", belt_green: "Ceinture verte",
   belt_blue: "Ceinture bleue", belt_purple: "Ceinture violette", belt_brown: "Ceinture marron", belt_black: "Ceinture noire",
   tier_basics: "Les bases", tier_workspaces: "Espaces de travail", tier_windows: "Fenêtres", tier_tools: "Outils",

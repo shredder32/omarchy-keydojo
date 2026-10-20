@@ -7,6 +7,7 @@ var NAME = "日本語"
 var STRINGS = {
   tagline: "コンボを身につけよう",
   loading: "キーバインドを読み込み中…",
+  loadFailed: "キーバインドを読み込めませんでした。閉じます…",
   belt_white: "白帯", belt_yellow: "黄帯", belt_orange: "橙帯", belt_green: "緑帯",
   belt_blue: "青帯", belt_purple: "紫帯", belt_brown: "茶帯", belt_black: "黒帯",
   tier_basics: "基本", tier_workspaces: "ワークスペース", tier_windows: "ウィンドウ", tier_tools: "ツール",

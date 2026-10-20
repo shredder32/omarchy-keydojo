@@ -299,7 +299,9 @@ Item {
   }
 
   readonly property bool missionVisible: opened && (screen === "mission" || screen === "missionDone")
-  readonly property bool capturing: opened && !missionVisible
+  // Hyprland's keybindings stay live until the bindings are actually loaded,
+  // so a slow or failed read never leaves the keyboard captured.
+  readonly property bool capturing: opened && !missionVisible && cards !== null
 
   function tr() {
     return I18n.t.apply(null, [root.lang].concat(Array.prototype.slice.call(arguments)))
@@ -333,9 +335,10 @@ Item {
     if (root.notifyOn) root.progress.notifiedAt = root.clock
     root.heldMods = ({})
     root.homeMessage = ""
+    if (root.screen === "failed") root.screen = "loading"
     if (root.screen !== "loading") root.screen = "home"
     root.preselect()
-    keymapProc.running = true
+    root.readData()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -344,6 +347,12 @@ Item {
     root.opened = false
     if (root.screen !== "loading") root.screen = "home"
     root.saveProgress()
+  }
+
+  Timer {
+    id: failedTimer
+    interval: 4000
+    onTriggered: if (root.opened && root.screen === "failed") root.dismiss()
   }
 
   function dismiss() {
@@ -372,31 +381,81 @@ Item {
 
   // ------------------------------------------------------------ data
 
-  Process {
-    id: keymapProc
-    command: ["bash", root.pluginDir + "/bin/keydojo-keymap"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        root.keymap = Keymap.parseXkb(text)
-        var layout = /keydojo-layout: (\S+)/.exec(text)
-        root.layoutHint = layout ? layout[1] : ""
-        root.pickDefaultLang()
-        bindsProc.running = true
+  // Both readers go through bin/keydojo-read: a deadline and a size limit
+  // each, and empty output if either is hit. readerWatchdog is the backstop
+  // if a reader outlives even that. readStage says which one is running, so
+  // a late result from a reader already given up on is ignored.
+  readonly property int readSeconds: 5
+  readonly property int readMaxBytes: 1048576
+  property string readStage: ""
+
+  function readCommand(args) {
+    return [root.pluginDir + "/bin/keydojo-read", String(root.readSeconds), String(root.readMaxBytes)].concat(args)
+  }
+
+  function readData() {
+    if (root.readStage !== "") return
+    root.readStage = "keymap"
+    readerWatchdog.restart()
+    keymapProc.running = true
+  }
+
+  Timer {
+    id: readerWatchdog
+    interval: (root.readSeconds + 3) * 1000
+    onTriggered: {
+      // Cleared first, so whatever the killed reader still delivers is ignored.
+      var stage = root.readStage
+      root.readStage = ""
+      if (stage === "keymap") {
+        keymapProc.running = false
+        root.loadKeymap("")
+      } else if (stage === "binds") {
+        bindsProc.running = false
+        root.loadBindings("")
       }
     }
   }
 
   Process {
-    id: bindsProc
-    command: ["bash", "-c", 'PATH="$1/bin:$PATH" omarchy-menu-keybindings --print', "keydojo", root.omarchyPath]
+    id: keymapProc
+    command: root.readCommand(["bash", root.pluginDir + "/bin/keydojo-keymap"])
     stdout: StdioCollector {
-      onStreamFinished: root.loadBindings(text)
+      onStreamFinished: if (root.readStage === "keymap") root.loadKeymap(text)
     }
   }
 
+  Process {
+    id: bindsProc
+    command: root.readCommand(["bash", "-c", 'PATH="$1/bin:$PATH" omarchy-menu-keybindings --print', "keydojo", root.omarchyPath])
+    stdout: StdioCollector {
+      onStreamFinished: if (root.readStage === "binds") root.loadBindings(text)
+    }
+  }
+
+  // An unreadable keymap only costs the printed key labels: carry on with the
+  // defaults and read the bindings anyway.
+  function loadKeymap(text) {
+    root.keymap = Keymap.parseXkb(text)
+    var layout = /keydojo-layout: (\S+)/.exec(text)
+    root.layoutHint = layout ? layout[1] : ""
+    root.pickDefaultLang()
+    root.readStage = "binds"
+    readerWatchdog.restart()
+    bindsProc.running = true
+  }
+
   function loadBindings(text) {
+    root.readStage = ""
+    readerWatchdog.stop()
     var parsed = Engine.parseBindings(text, root.keymap)
     if (parsed.bindings.length === 0 && root.cards) return
+    // Nothing to train on: say so and close, rather than sit on the overlay.
+    if (parsed.bindings.length === 0) {
+      root.screen = "failed"
+      if (root.opened) failedTimer.restart()
+      return
+    }
     root.cards = Engine.buildCards(parsed.bindings)
     root.skipped = parsed.skipped
     root.revision++
@@ -1139,8 +1198,8 @@ Item {
 
         Text {
           anchors.centerIn: parent
-          visible: root.screen === "loading"
-          text: root.tr("loading")
+          visible: root.screen === "loading" || root.screen === "failed"
+          text: root.tr(root.screen === "failed" ? "loadFailed" : "loading")
           color: Util.alpha(root.fg, 0.7)
           font.family: root.font
           font.pixelSize: Style.font.heading
