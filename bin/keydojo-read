@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Runs one of Keydojo's readers with a deadline and a size limit:
+#   keydojo-read SECONDS MAX_BYTES COMMAND [ARGS...]
+# The whole output is printed only if the command finished in time, succeeded
+# and stayed within MAX_BYTES. Otherwise nothing is printed and the exit status
+# is non-zero, so the overlay falls back instead of waiting on a stuck reader.
+
+set -o pipefail
+
+secs=$1 max=$2
+shift 2
+
+# timeout kills the command's whole process group, so stuck grandchildren
+# (hyprctl, xkbcli) go too. head stops reading one byte past the limit.
+out=$(timeout -k 1 "$secs" "$@" </dev/null 2>/dev/null | head -c $((max + 1))) || exit 1
+
+LC_ALL=C
+(( ${#out} <= max )) || exit 1
+printf '%s\n' "$out"

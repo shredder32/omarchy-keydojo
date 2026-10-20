@@ -5,6 +5,7 @@ var NAME = "Italiano"
 var STRINGS = {
   tagline: "Impara le tue combo",
   loading: "Leggo le tue scorciatoie…",
+  loadFailed: "Non riesco a leggere le tue scorciatoie. Chiudo…",
   belt_white: "Cintura bianca", belt_yellow: "Cintura gialla", belt_orange: "Cintura arancione", belt_green: "Cintura verde",
   belt_blue: "Cintura blu", belt_purple: "Cintura viola", belt_brown: "Cintura marrone", belt_black: "Cintura nera",
   tier_basics: "Fondamentali", tier_workspaces: "Workspace", tier_windows: "Finestre", tier_tools: "Strumenti",

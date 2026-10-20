@@ -109,6 +109,9 @@ if you want to forget your progress too, `~/.local/state/keydojo/`.
 - `Super+Ctrl+Alt+Esc` always releases the keyboard and closes Keydojo.
 - `bin/keydojo-guard` resets the submap automatically if the overlay vanishes
   while capturing (a shell crash or reload).
+- Your keybindings stay live until Keydojo has read them. Each reader gets
+  5 seconds and 1 MiB (`bin/keydojo-read`); if one fails, Keydojo says so
+  and closes instead of waiting.
 - Missions never ask for destructive actions (close all, lock, power) and
   clean up the windows they open.
 

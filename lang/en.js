@@ -8,6 +8,7 @@ var NAME = "English"
 var STRINGS = {
   tagline: "Learn your combos",
   loading: "Reading your keybindings…",
+  loadFailed: "Couldn't read your keybindings. Closing…",
   belt_white: "White belt", belt_yellow: "Yellow belt", belt_orange: "Orange belt", belt_green: "Green belt",
   belt_blue: "Blue belt", belt_purple: "Purple belt", belt_brown: "Brown belt", belt_black: "Black belt",
   tier_basics: "Basics", tier_workspaces: "Workspaces", tier_windows: "Windows", tier_tools: "Tools",

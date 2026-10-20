@@ -5,6 +5,7 @@ var NAME = "Deutsch"
 var STRINGS = {
   tagline: "Lerne deine Combos",
   loading: "Lese deine Tastenkürzel…",
+  loadFailed: "Deine Tastenkürzel ließen sich nicht lesen. Wird geschlossen…",
   belt_white: "Weißer Gurt", belt_yellow: "Gelber Gurt", belt_orange: "Orangener Gurt", belt_green: "Grüner Gurt",
   belt_blue: "Blauer Gurt", belt_purple: "Violetter Gurt", belt_brown: "Brauner Gurt", belt_black: "Schwarzer Gurt",
   tier_basics: "Grundlagen", tier_workspaces: "Arbeitsbereiche", tier_windows: "Fenster", tier_tools: "Werkzeuge",
