@@ -18,13 +18,17 @@ var INTERVALS = [0, 10, 30, 60 * 24, 60 * 24 * 3, 60 * 24 * 7]
 var FAST_MS = 2500
 var CLIMB_FREELY = 2
 
+// `questions` and `seconds` set a session's length; the home tiles show them.
+var LEARN_BATCH = 5
 var MODES = [
   { id: "learn",     icon: "󰑴", rule: { learned: 0 } },
-  { id: "recognize", icon: "󰈈", rule: { learned: 4 } },
-  { id: "recall",    icon: "󰌌", rule: { learned: 6 } },
-  { id: "blitz",     icon: "󱐋", rule: { belt: 1 } },
+  { id: "recognize", icon: "󰈈", rule: { learned: 4 }, questions: 8 },
+  { id: "recall",    icon: "󰌌", rule: { learned: 6 }, questions: 10 },
+  { id: "blitz",     icon: "󱐋", rule: { belt: 1 }, seconds: 60 },
   { id: "missions",  icon: "󰓾", rule: { belt: 2 } }
 ]
+// Recognize only shows the combo, so it can't carry a move past this level.
+var RECOGNIZE_CAP = CLIMB_FREELY
 
 var BASICS = /^(Terminal|Browser|File manager|Omarchy menu|Apps menu|Keybindings|Close window|Full screen|System menu|Lock system|Toggle window floating\/tiling)$/
 var MASTER = /monitor|group|Expand window|Shrink window|webcam|window width|scaling|laptop display|mirroring|zoom|square aspect/i
@@ -216,6 +220,12 @@ function belt(cards, progress) {
 function learnedCount(cards, progress) {
   var n = 0
   for (var i = 0; i < cards.list.length; i++) if (level(progress, cards.list[i].id) >= 1) n++
+  return n
+}
+
+function masteredCount(cards, progress) {
+  var n = 0
+  for (var i = 0; i < cards.list.length; i++) if (level(progress, cards.list[i].id) >= MASTERED_LEVEL) n++
   return n
 }
 

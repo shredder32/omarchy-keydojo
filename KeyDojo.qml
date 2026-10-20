@@ -28,6 +28,9 @@ Item {
   readonly property color accent: Color.accent
   readonly property color good: "#7bd88f"
   readonly property color bad: Color.urgent
+  // A wrong pick must read at a glance next to the green answer; the theme's
+  // urgent colour can be too muted for that.
+  readonly property color wrongPick: "#eb5757"
   readonly property string font: Style.font.family
   readonly property int radius: Math.max(6, Style.cornerRadius)
 
@@ -74,6 +77,18 @@ Item {
   property var options: []
   property int optSel: 0
   property int optChosen: -1
+  // Why a correct answer did or didn't level the move up, on its own line.
+  property string feedbackNote: ""
+  // First miss per move this session: { card, member, confused }.
+  property var sMissed: []
+  // A drill replays sMissed as a fixed Recall queue.
+  property bool drill: false
+
+  // Catalog
+  property string catQuery: ""
+  property string catCombo: ""
+  property var catPressed: ({ mods: [], label: "" })
+  property int catSel: 0
 
   // Blitz
   property real timeLeft: 60
@@ -93,7 +108,12 @@ Item {
   readonly property var learnModes: Engine.MODES
   readonly property int belt: { root.revision; return root.cards ? Engine.belt(root.cards, root.progress) : 0 }
   readonly property int learned: { root.revision; return root.cards ? Engine.learnedCount(root.cards, root.progress) : 0 }
+  readonly property int mastered: { root.revision; return root.cards ? Engine.masteredCount(root.cards, root.progress) : 0 }
   readonly property int totalCards: root.cards ? root.cards.list.length : 0
+  // Reduced motion: no pulsing, shaking, confetti or backdrop replays.
+  readonly property bool calm: { root.revision; return root.progress.calm === true }
+  // Opt-in, off by default: a desktop notification when moves can level up.
+  readonly property bool notifyOn: { root.revision; return root.progress.notify === true }
   readonly property var tierNow: {
     root.revision
     if (!root.cards || root.belt >= Engine.TIERS.length) return null
@@ -123,6 +143,38 @@ Item {
     if (root.dueNow > 0) return root.tr("dueNow", root.dueNow)
     if (root.nextDue <= 0) return ""
     return root.tr(root.suggested === -1 ? "idleReview" : "nextReview", root.duration(root.nextDue))
+      + (root.notifyOn ? "" : "  ·  " + root.tr("notifyHint"))
+  }
+
+  // ------------------------------------------------------------ ready notice
+
+  readonly property int notifyGapMs: 60 * 60000
+
+  // Checks while Keydojo is closed. It reads the saved progress only, so it
+  // works before the overlay has ever been opened in this session.
+  Timer {
+    interval: 60000
+    repeat: true
+    triggeredOnStart: true
+    running: root.progressReady && root.notifyOn && !root.opened
+    onTriggered: root.checkReady()
+  }
+
+  // Notifies once when moves you haven't been told about come due, and never
+  // more than once an hour. Opening Keydojo counts as being told.
+  function checkReady() {
+    var now = Date.now()
+    var count = 0, newest = 0
+    for (var id in root.progress.cards) {
+      var s = root.progress.cards[id]
+      if (s.lvl >= 1 && s.due <= now) { count++; newest = Math.max(newest, s.due) }
+    }
+    var last = root.progress.notifiedAt || 0
+    if (count === 0 || newest <= last || now - last < root.notifyGapMs) return
+    root.progress.notifiedAt = now
+    root.saveProgress()
+    Quickshell.execDetached(["notify-send", "-a", "Keydojo", "-i", "input-keyboard", "Keydojo",
+                             root.tr(count === 1 ? "notifyOne" : "notifyMany", count)])
   }
 
   // The mode that moves progress forward right now: Recall when an answer
@@ -160,6 +212,14 @@ Item {
     return out
   }
 
+  // The way forward wears the colour of the belt it earns; the black belt
+  // would vanish on a dark panel, so it falls back to the text colour.
+  readonly property int nextBelt: Math.min(root.belt + 1, Engine.BELT_COLORS.length - 1)
+  readonly property color suggestColor: !root.tierNow || root.nextBelt === Engine.BELT_COLORS.length - 1
+    ? root.fg : Engine.BELT_COLORS[root.nextBelt]
+  readonly property color suggestInk: !root.tierNow || root.nextBelt === Engine.BELT_COLORS.length - 1
+    ? root.bg : "#1c1c1c"
+
   readonly property var upNext: {
     root.revision
     return root.cards ? Engine.newCards(root.cards, root.progress, 6) : []
@@ -174,6 +234,68 @@ Item {
       out.push({ unlocked: unlocked, lockText: lockText })
     }
     return out
+  }
+
+  // What a session asks of you, shown on its tile before you start.
+  readonly property var modeMeta: {
+    root.revision
+    var out = []
+    for (var i = 0; i < Engine.MODES.length; i++) {
+      var m = Engine.MODES[i]
+      var text = ""
+      if (m.questions) text = root.tr("metaQuestions", m.questions)
+      else if (m.seconds) text = root.tr("metaSeconds", m.seconds)
+      else if (m.id === "learn" && root.cards) {
+        var fresh = Engine.newCards(root.cards, root.progress, Engine.LEARN_BATCH).length
+        text = fresh > 0 ? root.tr("metaNew", fresh) : ""
+      } else if (m.id === "missions" && root.cards) {
+        var runs = Missions.available(root.cards.byId, Engine.unlockedTier(root.cards, root.progress))
+        var steps = runs.map(function(r) { return r.steps.length })
+        var lo = Math.min.apply(null, steps), hi = Math.max.apply(null, steps)
+        text = runs.length === 0 ? "" : root.tr("metaSteps", lo === hi ? lo : lo + "–" + hi)
+      }
+      out.push(text)
+    }
+    return out
+  }
+
+  // Seconds with one decimal, written the way the language writes them.
+  function seconds(ms) {
+    return (Math.round(ms / 100) / 10).toFixed(1).replace(".", root.tr("decimalSep"))
+  }
+
+  // ------------------------------------------------------------ catalog
+
+  // Every move, filtered by what you typed or by the combo you pressed.
+  readonly property var catalog: {
+    root.revision
+    if (!root.cards) return []
+    var q = root.catQuery.toLowerCase()
+    var out = []
+    for (var i = 0; i < root.cards.list.length; i++) {
+      var c = root.cards.list[i]
+      var first = c.members[0], last = c.members[c.members.length - 1]
+      var text = I18n.desc(root.lang, c.id, c.family ? first.n + "–" + last.n : null)
+      if (root.catCombo !== "") {
+        if (!c.members.some(function(m) { return m.combo === root.catCombo })) continue
+      } else if (q !== "" && (text + " " + c.id + " " + root.tierName(c.tier)).toLowerCase().indexOf(q) === -1) continue
+      out.push({ text: text, card: c, mods: first.mods,
+                 label: c.family ? first.label + "–" + last.label : first.label,
+                 level: Engine.level(root.progress, c.id) })
+    }
+    out.sort(function(a, b) { return a.card.tier - b.card.tier || a.card.order - b.card.order })
+    if (root.catCombo === "")
+      for (var j = 0; j < root.skipped.length; j++)
+        if (q === "" || root.skipped[j].toLowerCase().indexOf(q) !== -1)
+          out.push({ text: I18n.desc(root.lang, root.skipped[j], null), card: null, mods: [], label: "", level: -1 })
+    return out
+  }
+
+  function catStatus(row) {
+    if (row.level < 0) return root.tr("catSkipped")
+    if (row.level === 0) return root.tr("catNew")
+    if (row.level >= Engine.MASTERED_LEVEL) return root.tr("catMastered")
+    return root.tr("catLevel", row.level, Engine.MASTERED_LEVEL)
   }
 
   readonly property bool missionVisible: opened && (screen === "mission" || screen === "missionDone")
@@ -208,6 +330,7 @@ Item {
   function open(payloadJson) {
     root.clock = Date.now()
     root.opened = true
+    if (root.notifyOn) root.progress.notifiedAt = root.clock
     root.heldMods = ({})
     root.homeMessage = ""
     if (root.screen !== "loading") root.screen = "home"
@@ -362,8 +485,10 @@ Item {
     if (root.screen === "home") root.homeKey(event.key, plain)
     else if (root.screen === "quiz") root.quizKey(event.key, plain, combo, mods, label)
     else if (root.screen === "recognize") root.recognizeKey(event.key, plain)
+    else if (root.screen === "catalog") root.catalogKey(event, mods, combo, label)
     else if (root.screen === "summary") {
       if (plain && event.key === Qt.Key_Escape) root.goHome()
+      else if (plain && event.key === Qt.Key_R && root.sMissed.length > 0) root.startDrill()
       else if (plain && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) root.startMode(root.homeSel)
     } else if (root.screen === "missionIntro") {
       if (plain && event.key === Qt.Key_Escape) root.goHome()
@@ -383,11 +508,51 @@ Item {
       root.progress.lang = root.lang
       root.saveProgress()
     }
+    else if (key === Qt.Key_M) {
+      root.progress.calm = !root.calm
+      root.revision++
+      root.saveProgress()
+    }
+    else if (key === Qt.Key_N) {
+      root.progress.notify = !root.notifyOn
+      // Only moves that come due from now on count: no notice for what you see here.
+      root.progress.notifiedAt = Date.now()
+      root.revision++
+      root.saveProgress()
+      root.homeMessage = root.tr(root.notifyOn ? "notifyEnabled" : "notifyDisabled")
+    }
+    else if (key === Qt.Key_C && root.cards) root.openCatalog()
+  }
+
+  function openCatalog() {
+    root.catQuery = ""
+    root.catCombo = ""
+    root.catSel = 0
+    root.homeMessage = ""
+    root.screen = "catalog"
+  }
+
+  // Typing filters by name; a combo with Super, Ctrl or Alt looks itself up.
+  function catalogKey(event, mods, combo, label) {
+    var key = event.key
+    var plain = mods.length === 0
+    var typing = mods.every(function(m) { return m === "SHIFT" })
+    if (plain && key === Qt.Key_Escape) {
+      if (root.catQuery !== "" || root.catCombo !== "") { root.catQuery = ""; root.catCombo = "" }
+      else root.goHome()
+    } else if (plain && key === Qt.Key_Down) root.catSel = Math.min(root.catalog.length - 1, root.catSel + 1)
+    else if (plain && key === Qt.Key_Up) root.catSel = Math.max(0, root.catSel - 1)
+    else if (plain && key === Qt.Key_PageDown) root.catSel = Math.min(root.catalog.length - 1, root.catSel + 8)
+    else if (plain && key === Qt.Key_PageUp) root.catSel = Math.max(0, root.catSel - 8)
+    else if (plain && key === Qt.Key_Backspace) { root.catCombo = ""; root.catQuery = root.catQuery.slice(0, -1); root.catSel = 0 }
+    else if (typing && event.text.length === 1 && event.text >= " ") { root.catCombo = ""; root.catQuery += event.text; root.catSel = 0 }
+    else if (!typing) { root.catQuery = ""; root.catCombo = combo; root.catPressed = { mods: mods, label: label }; root.catSel = 0 }
   }
 
   function goHome() {
     blitzTimer.stop()
     advanceTimer.stop()
+    root.drill = false
     root.question = null
     root.screen = "home"
     root.preselect()
@@ -395,9 +560,10 @@ Item {
 
   // ------------------------------------------------------------ sessions
 
-  function startMode(index) {
+  // `force` skips the unlock rule: a drill of your own misses is always open.
+  function startMode(index, force) {
     if (!root.cards) return
-    if (!root.modeStates[index].unlocked) { tileShake.restart(); return }
+    if (!force && !root.modeStates[index].unlocked) { root.wobble(tileShake); return }
     var m = Engine.MODES[index]
     root.homeMessage = ""
     root.mode = m.id
@@ -408,12 +574,14 @@ Item {
     root.sBeltBefore = root.belt
     root.sModesBefore = root.modeStates.map(function(s) { return s.unlocked })
     root.recent = []
+    root.sMissed = []
+    root.drill = false
     root.qIndex = 0
     root.question = null
 
     if (m.id === "missions") { root.prepareMission(); return }
     if (m.id === "learn") {
-      var fresh = Engine.newCards(root.cards, root.progress, 5)
+      var fresh = Engine.newCards(root.cards, root.progress, Engine.LEARN_BATCH)
       if (fresh.length === 0) { root.homeMessage = root.tr("nothingNew"); root.screen = "home"; return }
       root.queue = fresh.map(function(c) { return { card: c, phase: "intro" } })
         .concat(Engine.shuffle(fresh).map(function(c) { return { card: c, phase: "ask" } }))
@@ -426,18 +594,46 @@ Item {
       root.score = 0
       root.mult = 1
       root.streakCount = 0
-      root.timeLeft = 60
+      root.timeLeft = m.seconds
       blitzTimer.start()
     } else {
-      root.qTotal = m.id === "recognize" ? 8 : 10
+      root.qTotal = m.questions
     }
     root.screen = m.id === "recognize" ? "recognize" : "quiz"
     root.nextQuestion()
   }
 
+  // Replays this session's misses as Recall: producing the combo is the
+  // strongest practice, and Recall's own rules keep the spacing honest.
+  function startDrill() {
+    var missed = root.sMissed
+    root.homeSel = root.modeIndex("recall")
+    root.startMode(root.homeSel, true)
+    root.drill = true
+    root.queue = Engine.shuffle(missed).map(function(m) { return { card: m.card, phase: "ask" } })
+    root.qTotal = root.queue.length
+    root.qIndex = 0
+    root.recent = []
+    root.nextQuestion()
+  }
+
+  // Remembers the first miss on each move, and what it was mistaken for.
+  function noteMiss(confused) {
+    var q = root.question
+    if (!q || root.sMissed.some(function(m) { return m.card.id === q.card.id })) return
+    root.sMissed = root.sMissed.concat([{ card: q.card, member: q.member, confused: confused || "" }])
+  }
+
+  function confusedWith(combo) {
+    var hit = root.cards.byCombo[combo]
+    if (!hit || hit.card.id === root.question.card.id) return ""
+    return I18n.desc(root.lang, hit.card.id, hit.card.family ? hit.member.n : null)
+  }
+
   function nextQuestion() {
     root.feedbackKind = ""
     root.feedbackText = ""
+    root.feedbackNote = ""
     root.pressed = null
     root.hintShown = false
     root.attempts = 0
@@ -446,7 +642,7 @@ Item {
     if (root.mode === "blitz" ? root.timeLeft <= 0 : root.qIndex >= root.qTotal) { root.finishSession(); return }
 
     var card, ph = "ask"
-    if (root.mode === "learn") {
+    if (root.mode === "learn" || root.drill) {
       card = root.queue[root.qIndex].card
       ph = root.queue[root.qIndex].phase
     } else {
@@ -491,24 +687,42 @@ Item {
     return root.tr("thatWas", I18n.desc(root.lang, hit.card.id, hit.card.family ? hit.member.n : null))
   }
 
-  // Why a correct answer did not level the move up, if it didn't.
-  function answerNote(res, helped, ms) {
+  // What a correct answer did to the move's level, and why when it didn't
+  // climb: helped, too slow (with the actual time), or not due yet.
+  function answerNote(res, helped, ms, mode) {
     if (helped) return root.tr("helpedNote")
-    if (res.slow) return root.tr("slowNote", Math.round(ms / 1000))
+    if (res.slow) return root.tr("slowNote", root.seconds(ms), root.seconds(Engine.FAST_MS))
     if (res.early) return root.tr("earlyNote", root.duration(res.due - Date.now()))
+    if (res.levelUp && res.level === Engine.MASTERED_LEVEL) return root.tr("masteredNote")
+    if (res.levelUp) return res.level < Engine.MASTERED_LEVEL
+      ? root.tr("levelNote", res.level, Engine.MASTERED_LEVEL)
+      : root.tr("levelHighNote", res.level, Engine.MAX_LEVEL)
+    if (mode === "recognize" && res.level >= Engine.RECOGNIZE_CAP) return root.tr("recognizeCapNote")
     return ""
+  }
+
+  // How long a correct answer stays on screen: a reason to read takes longer.
+  function holdFor(res, note) {
+    if (!note) return 700
+    return res.levelUp ? 1100 : 1900
   }
 
   function markGood(xp, note) {
     root.feedbackKind = "good"
-    root.feedbackText = root.tr("correct") + (xp > 0 ? "  +" + xp + " XP" : "") + (note ? "  ·  " + note : "")
-    pop.restart()
+    root.feedbackText = root.tr("correct") + (xp > 0 ? "  +" + xp + " XP" : "")
+    root.feedbackNote = note || ""
+    if (!root.calm) pop.restart()
   }
 
   function markBad(combo, extra) {
     root.feedbackKind = "bad"
     root.feedbackText = root.describeCombo(combo) + (extra ? " · " + extra : "")
-    shake.restart()
+    root.wobble(shake)
+  }
+
+  // Shakes are feedback, not information: reduced motion skips them.
+  function wobble(anim) {
+    if (!root.calm) anim.restart()
   }
 
   function quizKey(key, plain, combo, mods, label) {
@@ -520,6 +734,7 @@ Item {
     if (!ok && plain && (key === Qt.Key_Return || key === Qt.Key_Enter) && root.phase === "ask" && root.mode !== "blitz") {
       root.attempts++
       root.sAnswered++
+      root.noteMiss("")
       root.grade(root.mode === "learn" ? "learn" : "recall", false)
       root.feedbackKind = "bad"
       root.feedbackText = root.tr("nowYou")
@@ -552,14 +767,15 @@ Item {
         root.mult = Math.min(5, 1 + Math.floor(root.streakCount / 3))
         root.score += 10 * root.mult
       }
-      var note = root.mode === "blitz" ? "" : root.answerNote(res, helped, ms)
+      var note = root.mode === "blitz" ? "" : root.answerNote(res, helped, ms, root.mode)
       root.markGood(res.xp, note)
-      root.advance(root.mode === "blitz" ? 300 : (note ? 1600 : 700))
+      root.advance(root.mode === "blitz" ? 300 : root.holdFor(res, note))
       return
     }
 
     root.attempts++
     if (root.attempts === 1) root.sAnswered++
+    root.noteMiss(root.confusedWith(combo))
     if (root.mode === "blitz") {
       root.streakCount = 0
       root.mult = 1
@@ -599,10 +815,18 @@ Item {
     root.optSel = i
     root.sAnswered++
     var ok = root.options[i].card.id === root.question.card.id
-    var r = root.grade("recognize", ok, Date.now() - root.askedAt < Engine.FAST_MS)
-    if (ok) { root.sCorrect++; root.markGood(r.xp) }
-    else { root.feedbackKind = "bad"; root.feedbackText = root.tr("wrong"); shake.restart() }
-    root.advance(ok ? 750 : 1600)
+    var ms = Date.now() - root.askedAt
+    var r = root.grade("recognize", ok, ms < Engine.FAST_MS)
+    var note = ok ? root.answerNote(r, false, ms, "recognize") : ""
+    if (ok) { root.sCorrect++; root.markGood(r.xp, note) }
+    else {
+      root.noteMiss(root.questionText(root.options[i]))
+      root.feedbackKind = "bad"
+      root.feedbackText = root.tr("wrong")
+      root.wobble(shake)
+    }
+    // A miss stays up longer: there are two options to compare.
+    root.advance(ok ? Math.max(750, root.holdFor(r, note)) : 2400)
   }
 
   Timer {
@@ -646,7 +870,7 @@ Item {
     root.newModes = unlocked
     root.question = null
     root.screen = "summary"
-    if (root.beltUp || root.newRecord) Qt.callLater(function() { confetti.burst() })
+    if ((root.beltUp || root.newRecord) && !root.calm) Qt.callLater(function() { confetti.burst() })
   }
 
   // ------------------------------------------------------------ missions
@@ -769,11 +993,11 @@ Item {
 
     onVisibleChanged: if (visible) Qt.callLater(function() { keyCatcher.forceActiveFocus() })
 
-    // On the home screen the backdrop is the scene, so the desktop behind it
-    // fades almost out; in games the scrim stays lighter.
+    // On the home screen the backdrop is the scene, and the catalog is for
+    // reading, so the desktop behind fades almost out; in games it stays lighter.
     Rectangle {
       anchors.fill: parent
-      color: Util.alpha(Color.menu.background, root.screen === "home" ? 0.985 : 0.72)
+      color: Util.alpha(Color.menu.background, root.screen === "home" || root.screen === "catalog" ? 0.985 : 0.72)
       Behavior on color { ColorAnimation { duration: 300 } }
     }
 
@@ -784,11 +1008,13 @@ Item {
 
     AmbientKeys {
       anchors.fill: parent
-      running: root.opened && root.screen === "home" && panel.visible
+      running: root.opened && root.screen === "home" && panel.visible && !root.calm
       keymap: root.keymap
       modNames: root.modNames
       combos: root.ambientCombos
-      avoid: Qt.rect(card.x, card.y, card.width, card.height)
+      // The card scales around its centre, so the area to keep clear grows with it.
+      avoid: Qt.rect(card.x - card.width * (card.scale - 1) / 2, card.y - card.height * (card.scale - 1) / 2,
+                     card.width * card.scale, card.height * card.scale)
       foreground: root.fg
       accent: root.accent
     }
@@ -801,8 +1027,13 @@ Item {
 
     BorderSurface {
       id: card
-      width: Math.min(panel.width - Style.space(48), Style.space(1000))
-      height: Math.min(panel.height - Style.space(48), Style.space(660))
+      // On a big screen the whole card grows, up to a quarter, while keeping
+      // a wide margin around it; small screens get the plain size.
+      readonly property real zoom: Math.max(1, Math.min(1.25,
+        panel.width * 0.62 / Style.space(1000), panel.height * 0.8 / Style.space(660)))
+      scale: zoom
+      width: Math.min(panel.width / zoom - Style.space(48), Style.space(1000))
+      height: Math.min(panel.height / zoom - Style.space(48), Style.space(700))
       anchors.centerIn: parent
       anchors.horizontalCenterOffset: shakeOffset
       radius: Style.cornerRadius
@@ -874,9 +1105,9 @@ Item {
               }
               Text {
                 text: root.tr("tagline")
-                color: Util.alpha(root.fg, 0.55)
+                color: Util.alpha(root.fg, 0.7)
                 font.family: root.font
-                font.pixelSize: Style.font.caption
+                font.pixelSize: Style.font.bodySmall
               }
             }
           }
@@ -951,7 +1182,8 @@ Item {
                       anchors.horizontalCenter: parent.horizontalCenter
                       radius: height / 2
                       color: Engine.BELT_COLORS[index]
-                      opacity: index <= root.belt ? 1 : 0.18
+                      // Belts ahead stay visible as goals, clearly dimmer than earned ones.
+                      opacity: index <= root.belt ? 1 : 0.4
                       border.width: index === root.belt ? 2 : (index === 7 ? 1 : 0)
                       border.color: index === root.belt ? root.accent : Util.alpha(root.fg, 0.4)
                       Behavior on height { NumberAnimation { duration: 200 } }
@@ -961,9 +1193,12 @@ Item {
                       width: parent.width
                       horizontalAlignment: Text.AlignHCenter
                       text: index === 0 ? "" : root.tierName(index - 1)
-                      color: Util.alpha(root.fg, index <= root.belt ? 0.75 : 0.55)
+                      color: Util.alpha(root.fg, index <= root.belt ? 1 : 0.75)
                       font.family: root.font
-                      font.pixelSize: Style.font.caption
+                      font.pixelSize: Style.font.body
+                      font.bold: index === root.belt
+                      wrapMode: Text.WordWrap
+                      maximumLineCount: 2
                       elide: Text.ElideRight
                     }
                   }
@@ -1006,7 +1241,33 @@ Item {
               font.pixelSize: Style.font.subtitle
             }
 
+            // Names the mode that earns the next belt on a filled banner, so
+            // the tile tagged below reads as the way forward rather than a hint.
+            Rectangle {
+              visible: root.suggested !== -1
+              width: parent.width
+              height: nextStepText.implicitHeight + Style.space(20)
+              radius: Math.max(6, Style.cornerRadius)
+              color: root.suggestColor
+
+              Text {
+                id: nextStepText
+                anchors.verticalCenter: parent.verticalCenter
+                x: Style.space(14)
+                width: parent.width - Style.space(28)
+                text: "󰁅  " + (root.tierNow
+                  ? root.tr("nextStep", root.modeName(Math.max(0, root.suggested)), root.beltInline(root.belt + 1))
+                  : root.tr("nextStepFree", root.modeName(Math.max(0, root.suggested))))
+                color: root.suggestInk
+                font.family: root.font
+                font.pixelSize: Style.font.heading
+                font.bold: true
+                wrapMode: Text.WordWrap
+              }
+            }
+
             Text {
+              visible: root.suggested === -1
               text: root.tr("chooseMode").toUpperCase()
               color: Util.alpha(root.fg, 0.5)
               font.family: root.font
@@ -1018,6 +1279,8 @@ Item {
               id: tiles
               width: parent.width
               spacing: Style.space(12)
+              // Room for the suggested tag riding the tiles' top edge.
+              topPadding: Style.space(14)
               property real offset: 0
 
               SequentialAnimation {
@@ -1044,6 +1307,10 @@ Item {
                   selected: index === root.homeSel
                   suggested: index === root.suggested
                   suggestedText: root.tr("suggested")
+                  suggestColor: root.suggestColor
+                  suggestInk: root.suggestInk
+                  meta: root.modeMeta[index]
+                  calm: root.calm
                   badge: Engine.MODES[index].id === "recall" && root.dueNow > 0 && root.modeStates[index].unlocked ? String(root.dueNow) : ""
                   onActivated: { root.homeSel = index; root.startMode(index) }
                 }
@@ -1058,9 +1325,10 @@ Item {
 
               Text {
                 text: root.tr("upNext").toUpperCase()
-                color: Util.alpha(root.fg, 0.5)
+                color: Util.alpha(root.fg, 0.75)
                 font.family: root.font
-                font.pixelSize: Style.font.caption
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
                 font.letterSpacing: Style.space(2)
               }
 
@@ -1074,16 +1342,16 @@ Item {
                     width: chipText.implicitWidth + Style.space(22)
                     height: chipText.implicitHeight + Style.space(12)
                     radius: height / 2
-                    color: Util.alpha(root.fg, 0.05)
+                    color: Util.alpha(root.fg, 0.08)
                     border.width: 1
-                    border.color: Util.alpha(root.fg, 0.14)
+                    border.color: Util.alpha(root.fg, 0.28)
                     Text {
                       id: chipText
                       anchors.centerIn: parent
                       text: I18n.desc(root.lang, modelData.id, modelData.family ? modelData.members[0].n : null)
-                      color: Util.alpha(root.fg, 0.8)
+                      color: Util.alpha(root.fg, 0.92)
                       font.family: root.font
-                      font.pixelSize: Style.font.bodySmall
+                      font.pixelSize: Style.font.body
                     }
                   }
                 }
@@ -1107,33 +1375,39 @@ Item {
             width: parent.width
             spacing: Style.space(6)
 
-            Text {
-              visible: root.skipped.length > 0
-              text: root.tr("unreachable", root.skipped.length)
-              color: Util.alpha(root.fg, 0.4)
-              font.family: root.font
-              font.pixelSize: Style.font.caption
-            }
-
             Item {
               width: parent.width
-              height: helpText.implicitHeight
+              height: knownText.implicitHeight
 
               Text {
-                id: helpText
-                text: root.tr("homeHelp", I18n.langName(root.lang))
-                color: Util.alpha(root.fg, 0.55)
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - knownText.implicitWidth - Style.space(24)
+                visible: root.skipped.length > 0
+                text: root.tr("unreachable", root.skipped.length)
+                color: Util.alpha(root.fg, 0.6)
                 font.family: root.font
                 font.pixelSize: Style.font.bodySmall
+                elide: Text.ElideRight
               }
 
+              // Learned and mastered side by side: belts count only the second.
               Text {
+                id: knownText
                 anchors.right: parent.right
-                text: root.tr("known", root.learned, root.totalCards)
-                color: Util.alpha(root.fg, 0.75)
+                text: root.tr("known", root.learned, root.mastered, root.totalCards)
+                color: Util.alpha(root.fg, 0.9)
                 font.family: root.font
-                font.pixelSize: Style.font.bodySmall
+                font.pixelSize: Style.font.body
               }
+            }
+
+            Text {
+              width: parent.width
+              text: root.tr("homeHelp", I18n.langName(root.lang), root.tr(root.calm ? "motionOff" : "motionOn"), root.tr(root.notifyOn ? "notifyOnLabel" : "notifyOffLabel"))
+              color: Util.alpha(root.fg, 0.75)
+              font.family: root.font
+              font.pixelSize: Style.font.body
+              wrapMode: Text.WordWrap
             }
           }
         }
@@ -1154,7 +1428,7 @@ Item {
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
-              text: root.mode ? root.modeName(root.modeIndex(root.mode)) + (root.question ? "  ·  " + root.tierName(root.question.card.tier) : "") : ""
+              text: root.mode ? (root.drill ? root.tr("drillTitle") : root.modeName(root.modeIndex(root.mode))) + (root.question ? "  ·  " + root.tierName(root.question.card.tier) : "") : ""
               color: Util.alpha(root.fg, 0.7)
               font.family: root.font
               font.pixelSize: Style.font.subtitle
@@ -1201,7 +1475,7 @@ Item {
               radius: height / 2
               color: root.mode === "blitz" && root.timeLeft < 10 ? root.bad : root.accent
               width: parent.width * (root.mode === "blitz"
-                ? root.timeLeft / 60
+                ? root.timeLeft / Engine.MODES[root.modeIndex("blitz")].seconds
                 : (root.qTotal > 0 ? Math.max(0, root.qIndex - 1) / root.qTotal : 0))
               Behavior on width { NumberAnimation { duration: 250 } }
             }
@@ -1290,6 +1564,17 @@ Item {
               font.family: root.font
               font.pixelSize: Math.round(Style.font.heading * 1.15)
               font.bold: root.feedbackKind !== ""
+              wrapMode: Text.WordWrap
+            }
+
+            // Always holds its line, so the note appearing doesn't shift the layout.
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              text: root.feedbackNote || " "
+              color: root.fg
+              font.family: root.font
+              font.pixelSize: Style.font.heading
               wrapMode: Text.WordWrap
             }
 
@@ -1447,6 +1732,17 @@ Item {
               font.bold: root.feedbackKind !== ""
             }
 
+            // Always holds its line, so the note appearing doesn't shift the layout.
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              text: root.feedbackNote || " "
+              color: root.fg
+              font.family: root.font
+              font.pixelSize: Style.font.heading
+              wrapMode: Text.WordWrap
+            }
+
             Grid {
               id: optGrid
               width: parent.width
@@ -1463,12 +1759,31 @@ Item {
                   width: (optGrid.width - optGrid.spacing) / 2
                   height: Style.space(68)
                   radius: root.radius
-                  color: revealed && isAnswer ? Util.alpha(root.good, 0.22)
-                       : revealed && index === root.optChosen ? Util.alpha(root.bad, 0.22)
+                  readonly property bool wrongPick: revealed && !isAnswer && index === root.optChosen
+                  // Once answered, the right option turns green and a wrong pick
+                  // red at the same time; the rest step back.
+                  color: revealed && isAnswer ? Util.alpha(root.good, 0.26)
+                       : wrongPick ? Util.alpha(root.wrongPick, 0.26)
+                       : revealed ? Util.alpha(root.fg, 0.02)
                        : index === root.optSel ? Util.alpha(root.accent, 0.12) : Util.alpha(root.fg, 0.04)
-                  border.width: index === root.optSel ? 2 : 1
-                  border.color: revealed && isAnswer ? root.good : index === root.optSel ? root.accent : Util.alpha(root.fg, 0.16)
+                  border.width: revealed && (isAnswer || wrongPick) ? 3 : index === root.optSel ? 2 : 1
+                  border.color: revealed && isAnswer ? root.good
+                              : wrongPick ? root.wrongPick
+                              : !revealed && index === root.optSel ? root.accent : Util.alpha(root.fg, 0.16)
+                  opacity: revealed && !isAnswer && !wrongPick ? 0.5 : 1
                   Behavior on color { ColorAnimation { duration: 150 } }
+
+                  Text {
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.space(14)
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: parent.revealed && (parent.isAnswer || parent.wrongPick)
+                    text: parent.isAnswer ? "󰄬" : "󰅖"
+                    color: parent.isAnswer ? root.good : root.wrongPick
+                    font.family: root.font
+                    font.pixelSize: Style.font.display
+                    font.bold: true
+                  }
 
                   Row {
                     anchors.verticalCenter: parent.verticalCenter
@@ -1485,7 +1800,7 @@ Item {
 
                     Text {
                       anchors.verticalCenter: parent.verticalCenter
-                      width: parent.width - Style.space(70)
+                      width: parent.width - Style.space(110)
                       text: root.questionText(modelData)
                       color: root.fg
                       font.family: root.font
@@ -1525,7 +1840,8 @@ Item {
           Column {
             anchors.horizontalCenter: parent.horizontalCenter
             width: parent.width
-            spacing: Style.space(16)
+            // Tighter when the misses list needs the room.
+            spacing: root.sMissed.length > 0 ? Style.space(11) : Style.space(16)
 
             Text {
               width: parent.width
@@ -1624,15 +1940,237 @@ Item {
                 font.pixelSize: Style.font.heading
               }
             }
+
+            // The moves to work on: right combo next to what it was mistaken for.
+            Column {
+              anchors.horizontalCenter: parent.horizontalCenter
+              width: Math.min(parent.width, Style.space(760))
+              visible: root.sMissed.length > 0 && root.mode !== "missions"
+              spacing: Style.space(8)
+              topPadding: Style.space(6)
+
+              Text {
+                width: parent.width
+                text: root.tr("toReview", root.sMissed.length).toUpperCase()
+                color: Util.alpha(root.fg, 0.75)
+                font.family: root.font
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                font.letterSpacing: Style.space(1)
+              }
+
+              Repeater {
+                model: root.sMissed.slice(0, 3)
+                Rectangle {
+                  required property var modelData
+                  width: parent.width
+                  height: Math.max(missText.implicitHeight, missCombo.implicitHeight) + Style.space(14)
+                  radius: root.radius
+                  color: Util.alpha(root.fg, 0.06)
+                  border.width: 1
+                  border.color: Util.alpha(root.fg, 0.16)
+
+                  Column {
+                    id: missText
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: Style.space(14)
+                    width: parent.width - missCombo.width - Style.space(42)
+                    spacing: Style.space(2)
+
+                    Text {
+                      width: parent.width
+                      text: root.questionText(modelData)
+                      color: root.fg
+                      font.family: root.font
+                      font.pixelSize: Style.font.body
+                      font.bold: true
+                      elide: Text.ElideRight
+                    }
+
+                    Text {
+                      width: parent.width
+                      visible: modelData.confused !== ""
+                      text: root.tr("confusedWith", modelData.confused)
+                      color: root.bad
+                      font.family: root.font
+                      font.pixelSize: Style.font.bodySmall
+                      elide: Text.ElideRight
+                    }
+                  }
+
+                  Combo {
+                    id: missCombo
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.space(14)
+                    modNames: root.modNames
+                    size: Style.font.body
+                    mods: modelData.member.mods
+                    keyLabel: modelData.member.label
+                  }
+                }
+              }
+            }
           }
 
           Text {
             anchors.bottom: parent.bottom
             anchors.horizontalCenter: parent.horizontalCenter
-            text: root.tr("continueHelp")
-            color: Util.alpha(root.fg, 0.55)
+            text: root.tr(root.sMissed.length > 0 && root.mode !== "missions" ? "continueHelpDrill" : "continueHelp")
+            color: Util.alpha(root.fg, 0.75)
             font.family: root.font
-            font.pixelSize: Style.font.bodySmall
+            font.pixelSize: Style.font.body
+          }
+        }
+
+        // ---------------------------------------------------- catalog
+
+        Item {
+          id: catalogView
+          visible: root.screen === "catalog"
+          anchors.fill: parent
+          anchors.topMargin: header.height + Style.space(18)
+
+          // Search line: what you typed, or the combo you pressed.
+          Rectangle {
+            id: catSearch
+            width: parent.width
+            height: Math.max(catSearchText.implicitHeight, catSearchCombo.implicitHeight) + Style.space(18)
+            radius: root.radius
+            color: Util.alpha(root.fg, 0.06)
+            border.width: Math.max(2, Style.space(2))
+            border.color: root.catQuery !== "" || root.catCombo !== "" ? root.accent : Util.alpha(root.fg, 0.25)
+
+            Row {
+              anchors.verticalCenter: parent.verticalCenter
+              x: Style.space(14)
+              spacing: Style.space(12)
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "󰍉"
+                color: root.accent
+                font.family: root.font
+                font.pixelSize: Style.font.heading
+              }
+
+              Combo {
+                id: catSearchCombo
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.catCombo !== ""
+                modNames: root.modNames
+                size: Style.font.body
+                tone: "accent"
+                mods: root.catPressed.mods
+                keyLabel: root.catPressed.label
+              }
+
+              Text {
+                id: catSearchText
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.catCombo !== "" ? (root.catalog.length === 0 ? root.tr("notBound") : "")
+                  : root.catQuery !== "" ? root.catQuery + "▏" : root.tr("catSearch")
+                color: root.catQuery !== "" ? root.fg : Util.alpha(root.fg, 0.7)
+                font.family: root.font
+                font.pixelSize: Style.font.heading
+              }
+            }
+
+            Text {
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(14)
+              anchors.verticalCenter: parent.verticalCenter
+              text: root.tr("catCount", root.catalog.length)
+              color: Util.alpha(root.fg, 0.7)
+              font.family: root.font
+              font.pixelSize: Style.font.body
+            }
+          }
+
+          ListView {
+            id: catList
+            anchors.top: catSearch.bottom
+            anchors.topMargin: Style.space(12)
+            anchors.bottom: catFooter.top
+            anchors.bottomMargin: Style.space(10)
+            width: parent.width
+            clip: true
+            spacing: Style.space(4)
+            model: root.catalog
+            currentIndex: root.catSel
+            highlightMoveDuration: root.calm ? 0 : 120
+            boundsBehavior: Flickable.StopAtBounds
+
+            delegate: Rectangle {
+              required property int index
+              required property var modelData
+              width: catList.width
+              height: Math.max(rowText.implicitHeight, rowCombo.implicitHeight) + Style.space(12)
+              radius: root.radius
+              color: index === root.catSel ? Util.alpha(root.accent, 0.14) : Util.alpha(root.fg, index % 2 === 0 ? 0.04 : 0.02)
+              border.width: index === root.catSel ? 1 : 0
+              border.color: root.accent
+
+              Column {
+                id: rowText
+                anchors.verticalCenter: parent.verticalCenter
+                x: Style.space(12)
+                width: parent.width - rowCombo.width - Style.space(40)
+                spacing: Style.space(2)
+
+                Text {
+                  width: parent.width
+                  text: modelData.text
+                  color: modelData.level < 0 ? Util.alpha(root.fg, 0.6) : root.fg
+                  font.family: root.font
+                  font.pixelSize: Style.font.body
+                  font.bold: modelData.level >= Engine.MASTERED_LEVEL
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  width: parent.width
+                  text: (modelData.card ? root.tierName(modelData.card.tier) + "  ·  " : "") + root.catStatus(modelData)
+                  color: modelData.level >= Engine.MASTERED_LEVEL ? root.good
+                    : modelData.level >= 1 ? Util.alpha(root.fg, 0.8) : Util.alpha(root.fg, 0.6)
+                  font.family: root.font
+                  font.pixelSize: Style.font.bodySmall
+                  elide: Text.ElideRight
+                }
+              }
+
+              Combo {
+                id: rowCombo
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(12)
+                visible: modelData.card !== null
+                modNames: root.modNames
+                size: Style.font.bodySmall
+                mods: modelData.mods
+                keyLabel: modelData.label
+              }
+            }
+          }
+
+          Text {
+            anchors.centerIn: catList
+            visible: root.catalog.length === 0 && root.catCombo === ""
+            text: root.tr("catEmpty")
+            color: Util.alpha(root.fg, 0.7)
+            font.family: root.font
+            font.pixelSize: Style.font.heading
+          }
+
+          Text {
+            id: catFooter
+            anchors.bottom: parent.bottom
+            width: parent.width
+            text: root.tr("catHelp")
+            color: Util.alpha(root.fg, 0.75)
+            font.family: root.font
+            font.pixelSize: Style.font.body
+            wrapMode: Text.WordWrap
           }
         }
 
@@ -1687,15 +2225,15 @@ Item {
             spacing: Style.space(4)
             Text {
               text: root.tr("emergency")
-              color: Util.alpha(root.fg, 0.4)
+              color: Util.alpha(root.fg, 0.6)
               font.family: root.font
-              font.pixelSize: Style.font.caption
+              font.pixelSize: Style.font.bodySmall
             }
             Text {
               text: root.tr("missionStart")
-              color: Util.alpha(root.fg, 0.55)
+              color: Util.alpha(root.fg, 0.75)
               font.family: root.font
-              font.pixelSize: Style.font.bodySmall
+              font.pixelSize: Style.font.body
             }
           }
         }
